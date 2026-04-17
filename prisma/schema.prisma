@@ -1,0 +1,64 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  USER
+  ADMIN
+}
+
+enum JobStatus {
+  PENDING
+  APPROVED
+  PRINTING
+  COMPLETED
+  REJECTED
+}
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  name          String?
+  passwordHash  String?
+  role          Role      @default(USER)
+  credits       Int       @default(1000)
+  jobs          Job[]
+  transactions  CreditTransaction[]
+  createdAt     DateTime  @default(now())
+}
+
+model Job {
+  id              String    @id @default(cuid())
+  title           String
+  description     String?
+  fileUrl         String
+  fileName        String
+  filamentGrams   Int
+  creditCost      Int
+  status          JobStatus @default(PENDING)
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  adminNotes      String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@index([userId, status])
+}
+
+model CreditTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id])
+  amount      Int
+  reason      String
+  jobId       String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+}

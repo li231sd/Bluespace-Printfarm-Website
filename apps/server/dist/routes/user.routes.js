@@ -1,0 +1,14 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const user_controller_js_1 = require("../controllers/user.controller.js");
+const auth_middleware_js_1 = require("../middleware/auth.middleware.js");
+const async_handler_js_1 = require("../utils/async-handler.js");
+const router = (0, express_1.Router)();
+router.post("/signup", (0, async_handler_js_1.asyncHandler)(user_controller_js_1.signup));
+router.post("/login", (0, async_handler_js_1.asyncHandler)(user_controller_js_1.login));
+router.get("/me", auth_middleware_js_1.requireAuth, (0, async_handler_js_1.asyncHandler)(user_controller_js_1.me));
+router.get("/top", auth_middleware_js_1.requireAuth, (0, auth_middleware_js_1.requireRole)("ADMIN"), (0, async_handler_js_1.asyncHandler)(user_controller_js_1.topUsers));
+router.get("/participants", auth_middleware_js_1.requireAuth, (0, auth_middleware_js_1.requireRole)("ADMIN"), (0, async_handler_js_1.asyncHandler)(user_controller_js_1.participants));
+router.delete("/:id", auth_middleware_js_1.requireAuth, (0, auth_middleware_js_1.requireRole)("ADMIN"), (0, async_handler_js_1.asyncHandler)(user_controller_js_1.deleteUser));
+exports.default = router;

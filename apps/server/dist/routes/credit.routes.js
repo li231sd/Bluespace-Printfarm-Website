@@ -1,0 +1,10 @@
+"use strict";
+Object.defineProperty(exports, "__esModule", { value: true });
+const express_1 = require("express");
+const credit_controller_js_1 = require("../controllers/credit.controller.js");
+const auth_middleware_js_1 = require("../middleware/auth.middleware.js");
+const async_handler_js_1 = require("../utils/async-handler.js");
+const router = (0, express_1.Router)();
+router.get("/mine", auth_middleware_js_1.requireAuth, (0, async_handler_js_1.asyncHandler)(credit_controller_js_1.myCredits));
+router.post("/adjust", auth_middleware_js_1.requireAuth, (0, auth_middleware_js_1.requireRole)("ADMIN"), (0, async_handler_js_1.asyncHandler)(credit_controller_js_1.adminAdjustCredits));
+exports.default = router;

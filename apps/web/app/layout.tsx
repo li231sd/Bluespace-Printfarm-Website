@@ -26,6 +26,10 @@ const bodyFont = Barlow({
 export const metadata: Metadata = {
   title: "Bluespace",
   description: "Hackathon 3D print request platform",
+  icons: {
+    icon: "/icon.png",
+    apple: "/icon.png",
+  },
 };
 
 export default function RootLayout({

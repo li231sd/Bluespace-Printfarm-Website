@@ -125,8 +125,12 @@ export const patchStatus = async (req: Request, res: Response) => {
 		return fail(res, 400, "Invalid status");
 	}
 
-	const updated = await updateJobStatus(id, status, adminNotes);
-	return ok(res, updated, "Job status updated");
+	try {
+		const updated = await updateJobStatus(id, status, adminNotes);
+		return ok(res, updated, "Job status updated");
+	} catch (error) {
+		return fail(res, 400, (error as Error).message);
+	}
 };
 
 export const patchEstimate = async (req: Request, res: Response) => {

@@ -53,7 +53,7 @@ export const api = {
   createJob: (payload: {
     title: string;
     description?: string;
-    filamentGrams: number;
+    fileSize: number;
     fileName: string;
     fileUrl: string;
   }) => request("/api/jobs", { method: "POST", body: payload }),

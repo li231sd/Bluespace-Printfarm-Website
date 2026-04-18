@@ -7,15 +7,21 @@ const env_js_1 = require("../config/env.js");
 const job_service_js_1 = require("../services/job.service.js");
 const storage_service_js_1 = require("../services/storage.service.js");
 const http_js_1 = require("../utils/http.js");
+const estimateFilamentGrams = (fileSizeBytes) => {
+    // Conservative heuristic calibrated to avoid underestimating lightweight parts.
+    const gramsFromFileSize = Math.ceil(fileSizeBytes / Math.max(1, env_js_1.env.autoEstimateBytesPerGram));
+    return Math.max(env_js_1.env.minimumFilamentGrams, gramsFromFileSize);
+};
 const createJob = async (req, res) => {
     const user = req.user;
     if (!user) {
         return (0, http_js_1.fail)(res, 401, "Authentication required");
     }
-    const { title, description, filamentGrams, fileUrl, fileName } = req.body;
-    if (!title || !fileName || !fileUrl || !filamentGrams || filamentGrams < 1) {
+    const { title, description, fileSize, fileUrl, fileName } = req.body;
+    if (!title || !fileName || !fileUrl || !fileSize || fileSize < 1) {
         return (0, http_js_1.fail)(res, 400, "Missing required job fields");
     }
+    const filamentGrams = estimateFilamentGrams(fileSize);
     const creditCost = Math.ceil(filamentGrams * env_js_1.env.creditPerGram);
     const job = await db_js_1.prisma.job.create({
         data: {
@@ -106,8 +112,13 @@ const patchStatus = async (req, res) => {
     if (!status || !Object.values(client_1.JobStatus).includes(status)) {
         return (0, http_js_1.fail)(res, 400, "Invalid status");
     }
-    const updated = await (0, job_service_js_1.updateJobStatus)(id, status, adminNotes);
-    return (0, http_js_1.ok)(res, updated, "Job status updated");
+    try {
+        const updated = await (0, job_service_js_1.updateJobStatus)(id, status, adminNotes);
+        return (0, http_js_1.ok)(res, updated, "Job status updated");
+    }
+    catch (error) {
+        return (0, http_js_1.fail)(res, 400, error.message);
+    }
 };
 exports.patchStatus = patchStatus;
 const patchEstimate = async (req, res) => {

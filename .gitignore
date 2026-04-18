@@ -1,0 +1,46 @@
+# Dependencies
+node_modules/
+
+# Build outputs
+dist/
+build/
+out/
+
+# TypeScript
+*.tsbuildinfo
+
+# Next.js
+.next/
+
+# Turborepo
+.turbo/
+
+# Test and coverage artifacts
+coverage/
+.nyc_output/
+
+# Logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# Environment and local config
+.env
+.env.*
+!.env.example
+
+# OS/editor files
+.DS_Store
+Thumbs.db
+.vscode/
+
+# Runtime/storage artifacts
+storage/uploads/*
+!storage/uploads/.gitkeep
+
+# Cache directories
+.cache/
+tmp/
+temp/

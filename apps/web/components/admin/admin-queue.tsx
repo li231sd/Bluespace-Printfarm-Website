@@ -20,6 +20,18 @@ export function AdminQueue({ initialJobs }: { initialJobs: Job[] }) {
   const [jobs, setJobs] = useState(initialJobs);
   const [busyId, setBusyId] = useState<string | null>(null);
 
+  const refreshJobs = async () => {
+    if (busyId) {
+      return;
+    }
+
+    try {
+      setJobs(await api.allJobs());
+    } catch {
+      // Keep the current queue visible if a periodic refresh fails.
+    }
+  };
+
   const onDownload = async (jobId: string, fileName: string) => {
     try {
       await api.downloadJobFile(jobId, fileName);
@@ -31,6 +43,31 @@ export function AdminQueue({ initialJobs }: { initialJobs: Job[] }) {
   useEffect(() => {
     setJobs(initialJobs);
   }, [initialJobs]);
+
+  useEffect(() => {
+    const interval = window.setInterval(() => {
+      void refreshJobs();
+    }, 10000);
+
+    const onFocus = () => {
+      void refreshJobs();
+    };
+
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "visible") {
+        void refreshJobs();
+      }
+    };
+
+    window.addEventListener("focus", onFocus);
+    document.addEventListener("visibilitychange", onVisibilityChange);
+
+    return () => {
+      window.clearInterval(interval);
+      window.removeEventListener("focus", onFocus);
+      document.removeEventListener("visibilitychange", onVisibilityChange);
+    };
+  }, [busyId]);
 
   const mutate = async (jobId: string, task: () => Promise<unknown>) => {
     setBusyId(jobId);

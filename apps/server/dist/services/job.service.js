@@ -2,6 +2,7 @@
 Object.defineProperty(exports, "__esModule", { value: true });
 exports.adjustEstimate = exports.updateJobStatus = exports.rejectJob = exports.approveJob = void 0;
 const db_js_1 = require("../config/db.js");
+const CHARGED_STATUSES = new Set(["APPROVED", "PRINTING", "COMPLETED"]);
 const approveJob = async (jobId) => {
     return db_js_1.prisma.$transaction(async (tx) => {
         const job = await tx.job.findUnique({ where: { id: jobId }, include: { user: true } });
@@ -65,12 +66,54 @@ const rejectJob = async (jobId, adminNotes) => {
 };
 exports.rejectJob = rejectJob;
 const updateJobStatus = async (jobId, status, adminNotes) => {
-    return db_js_1.prisma.job.update({
-        where: { id: jobId },
-        data: {
-            status,
-            adminNotes
+    return db_js_1.prisma.$transaction(async (tx) => {
+        const job = await tx.job.findUnique({
+            where: { id: jobId },
+            include: { user: true }
+        });
+        if (!job) {
+            throw new Error("Job not found");
         }
+        const wasCharged = CHARGED_STATUSES.has(job.status);
+        const shouldBeCharged = CHARGED_STATUSES.has(status);
+        if (!wasCharged && shouldBeCharged) {
+            if (job.user.credits < job.creditCost) {
+                throw new Error("User has insufficient credits");
+            }
+            await tx.user.update({
+                where: { id: job.userId },
+                data: { credits: { decrement: job.creditCost } }
+            });
+            await tx.creditTransaction.create({
+                data: {
+                    userId: job.userId,
+                    amount: -job.creditCost,
+                    reason: "JOB_STATUS_DEBIT",
+                    jobId: job.id
+                }
+            });
+        }
+        if (wasCharged && !shouldBeCharged) {
+            await tx.user.update({
+                where: { id: job.userId },
+                data: { credits: { increment: job.creditCost } }
+            });
+            await tx.creditTransaction.create({
+                data: {
+                    userId: job.userId,
+                    amount: job.creditCost,
+                    reason: "JOB_STATUS_REFUND",
+                    jobId: job.id
+                }
+            });
+        }
+        return tx.job.update({
+            where: { id: jobId },
+            data: {
+                status,
+                adminNotes
+            }
+        });
     });
 };
 exports.updateJobStatus = updateJobStatus;

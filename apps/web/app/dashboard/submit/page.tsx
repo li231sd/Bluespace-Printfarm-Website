@@ -5,16 +5,47 @@ import { api } from "@/lib/api";
 import { useSession } from "@/hooks/use-session";
 import { GlassCard } from "@/components/shared/glass-card";
 
+const toPositiveNumber = (value: string | undefined, fallback: number) => {
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
+};
+
+const AUTO_ESTIMATE_BYTES_PER_GRAM = toPositiveNumber(
+  process.env.NEXT_PUBLIC_AUTO_ESTIMATE_BYTES_PER_GRAM,
+  20 * 1024,
+);
+const MINIMUM_FILAMENT_GRAMS = toPositiveNumber(
+  process.env.NEXT_PUBLIC_MINIMUM_FILAMENT_GRAMS,
+  3,
+);
+const CREDIT_PER_GRAM = toPositiveNumber(
+  process.env.NEXT_PUBLIC_CREDIT_PER_GRAM,
+  1,
+);
+
 export default function SubmitJob() {
   const { user } = useSession();
-  const [grams, setGrams] = useState(0);
   const [file, setFile] = useState<File | null>(null);
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
 
-  const estimatedCredits = useMemo(() => grams, [grams]);
-  const canSubmit = !!user && grams > 0 && !!file;
+  const estimatedFilamentGrams = useMemo(() => {
+    if (!file) {
+      return null;
+    }
+    const sizeBased = Math.ceil(file.size / AUTO_ESTIMATE_BYTES_PER_GRAM);
+    return Math.max(MINIMUM_FILAMENT_GRAMS, sizeBased);
+  }, [file]);
+
+  const estimatedCredits = useMemo(() => {
+    if (estimatedFilamentGrams === null) {
+      return null;
+    }
+    return Math.ceil(estimatedFilamentGrams * CREDIT_PER_GRAM);
+  }, [estimatedFilamentGrams]);
+
+  const canSubmit = !!user && !!file;
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -29,11 +60,6 @@ export default function SubmitJob() {
       return;
     }
 
-    if (user.credits < estimatedCredits) {
-      setError("Estimated cost exceeds available credits.");
-      return;
-    }
-
     setUploading(true);
     const form = new FormData(e.currentTarget);
 
@@ -45,7 +71,7 @@ export default function SubmitJob() {
       await api.createJob({
         title: String(form.get("title") || ""),
         description: String(form.get("description") || ""),
-        filamentGrams: grams,
+        fileSize: uploaded.size,
         fileName: uploaded.fileName,
         fileUrl: uploaded.fileUrl,
       });
@@ -107,29 +133,21 @@ export default function SubmitJob() {
             </p>
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
-            <div>
-              <label className="mb-2 block text-sm text-ink/65">
-                Estimated filament (grams)
-              </label>
-              <input
-                type="number"
-                min={1}
-                value={grams || ""}
-                aria-label="Estimated filament grams"
-                title="Estimated filament grams"
-                onChange={(e) => setGrams(parseInt(e.target.value) || 0)}
-                className="input"
-              />
-            </div>
-            <div>
-              <label className="mb-2 block text-sm text-ink/65">
-                Estimated cost
-              </label>
-              <div className="rounded-2xl border border-blue-light/45 bg-blue-mid/20 p-3 font-bold text-cream">
-                {estimatedCredits} credits
-              </div>
-            </div>
+          <div className="rounded-2xl border border-blue-light/35 bg-space-800/55 p-4 text-sm text-cream/80">
+            <p>
+              Filament grams and credit cost are calculated automatically from
+              the uploaded model file.
+            </p>
+            {estimatedFilamentGrams !== null && estimatedCredits !== null ? (
+              <p className="mt-2 font-semibold text-cream">
+                Estimated usage: {estimatedFilamentGrams} g ({estimatedCredits}{" "}
+                credits)
+              </p>
+            ) : (
+              <p className="mt-2 text-cream/65">
+                Select a file to preview the estimate.
+              </p>
+            )}
           </div>
 
           {error ? <p className="text-sm text-rose-600">{error}</p> : null}

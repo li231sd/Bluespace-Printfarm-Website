@@ -40,6 +40,13 @@ export function TopNav() {
   const adminLinks = [{ href: "/admin/jobs", label: "Queue" }];
   const visibleLinks = user?.role === "ADMIN" ? adminLinks : userLinks;
 
+  const isActiveLink = (href: string) => {
+    if (href === "/dashboard") {
+      return pathname === "/dashboard";
+    }
+    return pathname === href || pathname.startsWith(`${href}/`);
+  };
+
   return (
     <nav className="sticky top-0 z-30 border-b border-blue-mid/30 bg-space-800/70 backdrop-blur-[20px]">
       <div className="mx-auto flex max-w-7xl items-center justify-between px-4 py-3 md:px-8">
@@ -56,7 +63,7 @@ export function TopNav() {
               href={item.href}
               className={clsx(
                 "relative rounded-full px-4 py-2 text-sm font-medium transition",
-                pathname.startsWith(item.href)
+                isActiveLink(item.href)
                   ? "bg-blue-mid text-cream shadow-glow-blue"
                   : "text-cream/80 hover:bg-space-700 hover:text-cream",
               )}
@@ -65,9 +72,7 @@ export function TopNav() {
               <span
                 className={clsx(
                   "absolute bottom-1 left-3 h-[2px] bg-blue-light transition-all duration-300",
-                  pathname.startsWith(item.href)
-                    ? "w-[calc(100%-1.5rem)]"
-                    : "w-0",
+                  isActiveLink(item.href) ? "w-[calc(100%-1.5rem)]" : "w-0",
                 )}
               />
             </Link>

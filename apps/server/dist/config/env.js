@@ -19,6 +19,8 @@ exports.env = {
     adminEmail: process.env.ADMIN_EMAIL ?? "manager@hackathon.dev",
     adminName: process.env.ADMIN_NAME ?? "3D Print Manager",
     creditPerGram: toNumber(process.env.CREDIT_PER_GRAM, 1),
+    autoEstimateBytesPerGram: toNumber(process.env.AUTO_ESTIMATE_BYTES_PER_GRAM, 20 * 1024),
+    minimumFilamentGrams: toNumber(process.env.MINIMUM_FILAMENT_GRAMS, 3),
     maxUploadMb: toNumber(process.env.MAX_UPLOAD_MB, 50),
     storageMode: process.env.STORAGE_MODE ?? "local",
     uploadDir: process.env.UPLOAD_DIR ?? "storage/uploads",

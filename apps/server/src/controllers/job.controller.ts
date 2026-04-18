@@ -6,23 +6,31 @@ import { adjustEstimate, approveJob, rejectJob, updateJobStatus } from "../servi
 import { deleteStoredFile, downloadStoredFile, uploadFileToStorage } from "../services/storage.service.js";
 import { fail, ok, created } from "../utils/http.js";
 
+const estimateFilamentGrams = (fileSizeBytes: number) => {
+	// Conservative heuristic calibrated to avoid underestimating lightweight parts.
+	const gramsFromFileSize = Math.ceil(fileSizeBytes / Math.max(1, env.autoEstimateBytesPerGram));
+	return Math.max(env.minimumFilamentGrams, gramsFromFileSize);
+};
+
 export const createJob = async (req: Request, res: Response) => {
 	const user = req.user;
 	if (!user) {
 		return fail(res, 401, "Authentication required");
 	}
 
-	const { title, description, filamentGrams, fileUrl, fileName } = req.body as {
+	const { title, description, fileSize, fileUrl, fileName } = req.body as {
 		title?: string;
 		description?: string;
-		filamentGrams?: number;
+		fileSize?: number;
 		fileUrl?: string;
 		fileName?: string;
 	};
 
-	if (!title || !fileName || !fileUrl || !filamentGrams || filamentGrams < 1) {
+	if (!title || !fileName || !fileUrl || !fileSize || fileSize < 1) {
 		return fail(res, 400, "Missing required job fields");
 	}
+
+	const filamentGrams = estimateFilamentGrams(fileSize);
 
 	const creditCost = Math.ceil(filamentGrams * env.creditPerGram);
 

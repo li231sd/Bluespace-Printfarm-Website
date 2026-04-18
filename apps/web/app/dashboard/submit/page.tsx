@@ -4,6 +4,7 @@ import { useRouter } from "next/navigation";
 import { api } from "@/lib/api";
 import { useSession } from "@/hooks/use-session";
 import { GlassCard } from "@/components/shared/glass-card";
+import { ModelPreview } from "@/components/shared/model-preview";
 
 type PreflightResult = {
   errors: string[];
@@ -221,6 +222,19 @@ export default function SubmitJob() {
               Only STL/OBJ files up to 50MB.
             </p>
           </div>
+
+          {file ? (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold uppercase tracking-wider text-cream/70">
+                3D model preview
+              </p>
+              <ModelPreview
+                file={file}
+                fileName={file.name}
+                className="h-[220px] w-full"
+              />
+            </div>
+          ) : null}
 
           <div className="rounded-2xl border border-blue-light/35 bg-space-800/55 p-4 text-sm text-cream/80">
             <p>

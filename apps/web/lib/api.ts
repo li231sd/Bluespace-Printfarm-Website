@@ -93,6 +93,24 @@ export const api = {
     anchor.remove();
     window.URL.revokeObjectURL(url);
   },
+  fetchJobFileBlob: async (id: string) => {
+    const token = authStore.getToken();
+    if (!token) {
+      throw new Error("Authentication required");
+    }
+
+    const response = await fetch(`${API_URL}/api/jobs/${id}/download`, {
+      headers: {
+        Authorization: `Bearer ${token}`,
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error("Unable to load model preview");
+    }
+
+    return response.blob();
+  },
   summary: () => request<any>("/api/jobs/analytics/summary"),
   updateStatus: (id: string, status: string, adminNotes?: string) =>
     request(`/api/jobs/${id}/status`, { method: "PATCH", body: { status, adminNotes } }),

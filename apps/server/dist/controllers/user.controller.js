@@ -3,7 +3,7 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.adminAuditLogs = exports.markNotificationRead = exports.myNotifications = exports.deleteUser = exports.participants = exports.topUsers = exports.me = exports.login = exports.signup = void 0;
+exports.adminAuditLogs = exports.deleteNotification = exports.markNotificationRead = exports.myNotifications = exports.deleteUser = exports.participants = exports.topUsers = exports.me = exports.login = exports.signup = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
 const client_1 = require("@prisma/client");
@@ -226,6 +226,23 @@ const markNotificationRead = async (req, res) => {
     return (0, http_js_1.ok)(res, updated);
 };
 exports.markNotificationRead = markNotificationRead;
+const deleteNotification = async (req, res) => {
+    const authUser = req.user;
+    if (!authUser) {
+        return (0, http_js_1.fail)(res, 401, "Authentication required");
+    }
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    if (!id) {
+        return (0, http_js_1.fail)(res, 400, "Missing notification id");
+    }
+    const notification = await db_js_1.prisma.notification.findUnique({ where: { id } });
+    if (!notification || notification.userId !== authUser.id) {
+        return (0, http_js_1.fail)(res, 404, "Notification not found");
+    }
+    await db_js_1.prisma.notification.delete({ where: { id } });
+    return (0, http_js_1.ok)(res, { id }, "Notification deleted");
+};
+exports.deleteNotification = deleteNotification;
 const adminAuditLogs = async (_req, res) => {
     const logs = await db_js_1.prisma.auditLog.findMany({
         include: {

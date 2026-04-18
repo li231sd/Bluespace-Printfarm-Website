@@ -10,6 +10,7 @@ router.post("/login", (0, async_handler_js_1.asyncHandler)(user_controller_js_1.
 router.get("/me", auth_middleware_js_1.requireAuth, (0, async_handler_js_1.asyncHandler)(user_controller_js_1.me));
 router.get("/notifications", auth_middleware_js_1.requireAuth, (0, async_handler_js_1.asyncHandler)(user_controller_js_1.myNotifications));
 router.patch("/notifications/:id/read", auth_middleware_js_1.requireAuth, (0, async_handler_js_1.asyncHandler)(user_controller_js_1.markNotificationRead));
+router.delete("/notifications/:id", auth_middleware_js_1.requireAuth, (0, async_handler_js_1.asyncHandler)(user_controller_js_1.deleteNotification));
 router.get("/top", auth_middleware_js_1.requireAuth, (0, auth_middleware_js_1.requireRole)("ADMIN"), (0, async_handler_js_1.asyncHandler)(user_controller_js_1.topUsers));
 router.get("/participants", auth_middleware_js_1.requireAuth, (0, auth_middleware_js_1.requireRole)("ADMIN"), (0, async_handler_js_1.asyncHandler)(user_controller_js_1.participants));
 router.get("/audit-logs", auth_middleware_js_1.requireAuth, (0, auth_middleware_js_1.requireRole)("ADMIN"), (0, async_handler_js_1.asyncHandler)(user_controller_js_1.adminAuditLogs));

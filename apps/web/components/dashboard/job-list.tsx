@@ -3,7 +3,6 @@
 import { Job } from "@/lib/types";
 import { api } from "@/lib/api";
 import { GlassCard } from "@/components/shared/glass-card";
-import { ModelPreview } from "@/components/shared/model-preview";
 import { StatusPill } from "@/components/shared/status-pill";
 
 const toPositiveNumber = (value: string | undefined, fallback: number) => {
@@ -186,11 +185,6 @@ export function JobList({ jobs }: { jobs: Job[] }) {
                 <div className="flex justify-end">
                   <StatusPill status={job.status} />
                 </div>
-                <ModelPreview
-                  jobId={job.id}
-                  fileName={job.fileName}
-                  className="h-[220px] w-full"
-                />
               </div>
             </div>
           </GlassCard>

@@ -89,7 +89,7 @@ export const allJobs = async (_req: Request, res: Response) => {
 				}
 			}
 		},
-		orderBy: { createdAt: "desc" }
+		orderBy: [{ createdAt: "asc" }, { id: "asc" }]
 	});
 
 	return ok(res, jobs);

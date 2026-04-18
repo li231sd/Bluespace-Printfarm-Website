@@ -1,12 +1,37 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Job, JobStatus } from "@/lib/types";
 import { api } from "@/lib/api";
 import { GlassCard } from "@/components/shared/glass-card";
 import { StatusPill } from "@/components/shared/status-pill";
 
 const statuses: JobStatus[] = ["APPROVED", "REJECTED", "COMPLETED"];
+
+const queueStatusPriority: Record<JobStatus, number> = {
+  PENDING: 0,
+  APPROVED: 1,
+  PRINTING: 2,
+  COMPLETED: 3,
+  REJECTED: 4,
+};
+
+const sortJobsForQueue = (items: Job[]) =>
+  [...items].sort((a, b) => {
+    const statusDelta =
+      queueStatusPriority[a.status] - queueStatusPriority[b.status];
+    if (statusDelta !== 0) {
+      return statusDelta;
+    }
+
+    const createdAtDelta =
+      new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+    if (createdAtDelta !== 0) {
+      return createdAtDelta;
+    }
+
+    return a.id.localeCompare(b.id);
+  });
 
 const statusLabel: Record<JobStatus, string> = {
   PENDING: "Pending",
@@ -19,6 +44,7 @@ const statusLabel: Record<JobStatus, string> = {
 export function AdminQueue({ initialJobs }: { initialJobs: Job[] }) {
   const [jobs, setJobs] = useState(initialJobs);
   const [busyId, setBusyId] = useState<string | null>(null);
+  const orderedJobs = useMemo(() => sortJobsForQueue(jobs), [jobs]);
 
   const refreshJobs = async () => {
     if (busyId) {
@@ -81,14 +107,14 @@ export function AdminQueue({ initialJobs }: { initialJobs: Job[] }) {
 
   return (
     <div className="grid gap-4">
-      {jobs.length === 0 ? (
+      {orderedJobs.length === 0 ? (
         <GlassCard>
           <p className="text-sm text-ink/70">
             No print requests in the queue yet.
           </p>
         </GlassCard>
       ) : null}
-      {jobs.map((job) => (
+      {orderedJobs.map((job) => (
         <GlassCard key={job.id} className="space-y-4">
           <div className="flex flex-wrap items-start justify-between gap-3">
             <div>

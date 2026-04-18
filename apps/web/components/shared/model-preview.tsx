@@ -256,7 +256,7 @@ export function Viewer3D({ file, jobId, fileName, className }: Viewer3DProps) {
   );
 }
 
-// Preview with button to open full-screen modal
+// Button to open full-screen 3D viewer modal
 export function ModelPreview({
   file,
   jobId,
@@ -267,23 +267,25 @@ export function ModelPreview({
 
   return (
     <>
-      <div className={className}>
-        <div className="relative">
-          <Viewer3D
-            file={file}
-            jobId={jobId}
-            fileName={fileName}
-            className="h-full"
+      <button
+        onClick={() => setIsModalOpen(true)}
+        className={`inline-flex items-center gap-2 rounded-lg bg-blue-mid px-4 py-2 text-sm font-medium text-cream transition-colors hover:bg-blue-mid/90 ${className || ""}`}
+      >
+        <svg
+          className="h-4 w-4"
+          fill="none"
+          stroke="currentColor"
+          viewBox="0 0 24 24"
+        >
+          <path
+            strokeLinecap="round"
+            strokeLinejoin="round"
+            strokeWidth={2}
+            d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"
           />
-          <button
-            onClick={() => setIsModalOpen(true)}
-            className="absolute bottom-3 right-3 rounded-lg bg-blue-mid/80 px-3 py-1.5 text-xs font-medium text-cream transition-colors hover:bg-blue-mid"
-            aria-label="View in fullscreen"
-          >
-            Expand
-          </button>
-        </div>
-      </div>
+        </svg>
+        View model
+      </button>
       <ModelViewerModal
         isOpen={isModalOpen}
         onClose={() => setIsModalOpen(false)}

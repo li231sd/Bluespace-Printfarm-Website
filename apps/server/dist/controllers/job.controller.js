@@ -4,13 +4,41 @@ exports.deleteJob = exports.downloadJobFile = exports.analyticsSummary = exports
 const client_1 = require("@prisma/client");
 const db_js_1 = require("../config/db.js");
 const env_js_1 = require("../config/env.js");
+const audit_service_js_1 = require("../services/audit.service.js");
+const job_inspection_service_js_1 = require("../services/job-inspection.service.js");
 const job_service_js_1 = require("../services/job.service.js");
+const notification_service_js_1 = require("../services/notification.service.js");
 const storage_service_js_1 = require("../services/storage.service.js");
 const http_js_1 = require("../utils/http.js");
 const estimateFilamentGrams = (fileSizeBytes) => {
     // Conservative heuristic calibrated to avoid underestimating lightweight parts.
     const gramsFromFileSize = Math.ceil(fileSizeBytes / Math.max(1, env_js_1.env.autoEstimateBytesPerGram));
     return Math.max(env_js_1.env.minimumFilamentGrams, gramsFromFileSize);
+};
+const statusLabel = {
+    PENDING: "pending review",
+    APPROVED: "approved",
+    PRINTING: "printing",
+    COMPLETED: "completed",
+    REJECTED: "rejected"
+};
+const notifyAdmins = async (input) => {
+    const admins = await db_js_1.prisma.user.findMany({
+        where: { role: "ADMIN" },
+        select: {
+            id: true,
+            email: true
+        }
+    });
+    await Promise.all(admins.map((admin) => (0, notification_service_js_1.createUserNotification)(db_js_1.prisma, {
+        userId: admin.id,
+        userEmail: admin.email,
+        jobId: input.jobId,
+        type: input.type,
+        title: input.title,
+        message: input.message,
+        notifyEmail: input.notifyEmail
+    })));
 };
 const createJob = async (req, res) => {
     const user = req.user;
@@ -21,20 +49,85 @@ const createJob = async (req, res) => {
     if (!title || !fileName || !fileUrl || !fileSize || fileSize < 1) {
         return (0, http_js_1.fail)(res, 400, "Missing required job fields");
     }
-    const filamentGrams = estimateFilamentGrams(fileSize);
-    const creditCost = Math.ceil(filamentGrams * env_js_1.env.creditPerGram);
-    const job = await db_js_1.prisma.job.create({
-        data: {
-            title,
-            description,
-            filamentGrams,
-            creditCost,
-            fileName,
-            fileUrl,
-            userId: user.id
+    const account = await db_js_1.prisma.user.findUnique({
+        where: { id: user.id },
+        select: {
+            id: true,
+            email: true,
+            credits: true
         }
     });
-    return (0, http_js_1.created)(res, job, "Submission created and pending review");
+    if (!account) {
+        return (0, http_js_1.fail)(res, 404, "User not found");
+    }
+    const filamentGrams = estimateFilamentGrams(fileSize);
+    const creditCost = Math.ceil(filamentGrams * env_js_1.env.creditPerGram);
+    const modelInspection = await (0, job_inspection_service_js_1.inspectModelFile)(fileName, fileUrl);
+    const needsAttentionFlags = (0, job_inspection_service_js_1.buildNeedsAttentionFlags)({
+        fileFlags: modelInspection.flags,
+        hasUnclearSpecs: !description || description.trim().length < 12,
+        hasCreditIssue: account.credits < creditCost
+    });
+    const job = await db_js_1.prisma.$transaction(async (tx) => {
+        const createdJob = await tx.job.create({
+            data: {
+                title,
+                description,
+                filamentGrams,
+                creditCost,
+                fileName,
+                fileUrl,
+                userId: user.id,
+                needsAttentionFlags
+            }
+        });
+        await tx.jobTimelineEvent.create({
+            data: {
+                jobId: createdJob.id,
+                status: "PENDING",
+                label: "Submitted",
+                actorUserId: user.id
+            }
+        });
+        return createdJob;
+    });
+    await (0, notification_service_js_1.createUserNotification)(db_js_1.prisma, {
+        userId: account.id,
+        userEmail: account.email,
+        jobId: job.id,
+        type: "JOB_SUBMITTED",
+        title: "Print request submitted",
+        message: `Your request "${job.title}" is in queue and awaiting review.`,
+        notifyEmail: true
+    });
+    await notifyAdmins({
+        jobId: job.id,
+        type: "JOB_SUBMITTED",
+        title: "New print request",
+        message: `A new request "${job.title}" was submitted and is awaiting review.`
+    });
+    if (needsAttentionFlags.length > 0) {
+        const attentionMessage = `Request "${job.title}" needs attention: ${needsAttentionFlags.join(", ")}.`;
+        await (0, notification_service_js_1.createUserNotification)(db_js_1.prisma, {
+            userId: account.id,
+            userEmail: account.email,
+            jobId: job.id,
+            type: "JOB_NEEDS_ATTENTION",
+            title: "Submission has warnings",
+            message: attentionMessage,
+            notifyEmail: true
+        });
+        await notifyAdmins({
+            jobId: job.id,
+            type: "JOB_NEEDS_ATTENTION",
+            title: "Job needs manager review",
+            message: attentionMessage
+        });
+    }
+    return (0, http_js_1.created)(res, {
+        ...job,
+        preflightWarnings: modelInspection.warnings
+    }, "Submission created and pending review");
 };
 exports.createJob = createJob;
 const uploadJobFile = async (req, res) => {
@@ -52,9 +145,25 @@ const myJobs = async (req, res) => {
     }
     const jobs = await db_js_1.prisma.job.findMany({
         where: { userId: user.id },
+        include: {
+            timeline: {
+                orderBy: { createdAt: "asc" }
+            }
+        },
         orderBy: { createdAt: "desc" }
     });
-    return (0, http_js_1.ok)(res, jobs);
+    const activeQueue = await db_js_1.prisma.job.findMany({
+        where: {
+            status: { in: ["PENDING", "APPROVED", "PRINTING"] }
+        },
+        select: {
+            id: true,
+            status: true,
+            createdAt: true
+        },
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }]
+    });
+    return (0, http_js_1.ok)(res, (0, job_inspection_service_js_1.enrichJobsWithQueueInfo)(jobs, activeQueue));
 };
 exports.myJobs = myJobs;
 const allJobs = async (_req, res) => {
@@ -67,11 +176,14 @@ const allJobs = async (_req, res) => {
                     email: true,
                     credits: true
                 }
+            },
+            timeline: {
+                orderBy: { createdAt: "asc" }
             }
         },
-        orderBy: { createdAt: "desc" }
+        orderBy: [{ createdAt: "asc" }, { id: "asc" }]
     });
-    return (0, http_js_1.ok)(res, jobs);
+    return (0, http_js_1.ok)(res, (0, job_inspection_service_js_1.enrichJobsWithQueueInfo)(jobs));
 };
 exports.allJobs = allJobs;
 const approve = async (req, res) => {
@@ -79,8 +191,31 @@ const approve = async (req, res) => {
     if (!id) {
         return (0, http_js_1.fail)(res, 400, "Missing job id");
     }
+    const adminUser = req.user;
     try {
         const job = await (0, job_service_js_1.approveJob)(id);
+        await db_js_1.prisma.jobTimelineEvent.create({
+            data: {
+                jobId: job.id,
+                status: "APPROVED",
+                label: "Approved",
+                actorUserId: adminUser?.id
+            }
+        });
+        if (adminUser) {
+            await (0, audit_service_js_1.logAudit)(adminUser.id, client_1.AuditAction.JOB_STATUS_UPDATED, "Job", job.id, {
+                toStatus: "APPROVED"
+            });
+        }
+        await (0, notification_service_js_1.createUserNotification)(db_js_1.prisma, {
+            userId: job.userId,
+            userEmail: job.user.email,
+            jobId: job.id,
+            type: "JOB_STATUS_CHANGED",
+            title: "Request approved",
+            message: `Your request "${job.title}" has been approved.`,
+            notifyEmail: true
+        });
         return (0, http_js_1.ok)(res, job, "Job approved and credits deducted");
     }
     catch (error) {
@@ -93,9 +228,34 @@ const reject = async (req, res) => {
     if (!id) {
         return (0, http_js_1.fail)(res, 400, "Missing job id");
     }
+    const adminUser = req.user;
     const { adminNotes } = req.body;
     try {
         const job = await (0, job_service_js_1.rejectJob)(id, adminNotes);
+        await db_js_1.prisma.jobTimelineEvent.create({
+            data: {
+                jobId: job.id,
+                status: "REJECTED",
+                label: "Rejected",
+                notes: adminNotes,
+                actorUserId: adminUser?.id
+            }
+        });
+        if (adminUser) {
+            await (0, audit_service_js_1.logAudit)(adminUser.id, client_1.AuditAction.JOB_STATUS_UPDATED, "Job", job.id, {
+                toStatus: "REJECTED",
+                adminNotes
+            });
+        }
+        await (0, notification_service_js_1.createUserNotification)(db_js_1.prisma, {
+            userId: job.userId,
+            userEmail: job.user.email,
+            jobId: job.id,
+            type: "JOB_STATUS_CHANGED",
+            title: "Request rejected",
+            message: `Your request "${job.title}" was rejected.${adminNotes ? ` Notes: ${adminNotes}` : ""}`,
+            notifyEmail: true
+        });
         return (0, http_js_1.ok)(res, job, "Job rejected");
     }
     catch (error) {
@@ -112,8 +272,33 @@ const patchStatus = async (req, res) => {
     if (!status || !Object.values(client_1.JobStatus).includes(status)) {
         return (0, http_js_1.fail)(res, 400, "Invalid status");
     }
+    const adminUser = req.user;
     try {
         const updated = await (0, job_service_js_1.updateJobStatus)(id, status, adminNotes);
+        await db_js_1.prisma.jobTimelineEvent.create({
+            data: {
+                jobId: updated.id,
+                status,
+                label: `Status updated to ${statusLabel[status]}`,
+                notes: adminNotes,
+                actorUserId: adminUser?.id
+            }
+        });
+        if (adminUser) {
+            await (0, audit_service_js_1.logAudit)(adminUser.id, client_1.AuditAction.JOB_STATUS_UPDATED, "Job", updated.id, {
+                toStatus: status,
+                adminNotes
+            });
+        }
+        await (0, notification_service_js_1.createUserNotification)(db_js_1.prisma, {
+            userId: updated.userId,
+            userEmail: updated.user.email,
+            jobId: updated.id,
+            type: "JOB_STATUS_CHANGED",
+            title: "Request status updated",
+            message: `Your request "${updated.title}" is now ${statusLabel[status]}.${adminNotes ? ` Notes: ${adminNotes}` : ""}`,
+            notifyEmail: true
+        });
         return (0, http_js_1.ok)(res, updated, "Job status updated");
     }
     catch (error) {
@@ -203,7 +388,7 @@ const deleteJob = async (req, res) => {
     }
     const job = await db_js_1.prisma.job.findUnique({
         where: { id },
-        select: { id: true, fileName: true, fileUrl: true }
+        select: { id: true, fileName: true, fileUrl: true, userId: true, title: true, user: { select: { email: true } } }
     });
     if (!job) {
         return (0, http_js_1.fail)(res, 404, "Job not found");
@@ -213,6 +398,20 @@ const deleteJob = async (req, res) => {
         await tx.job.delete({ where: { id } });
     });
     await (0, storage_service_js_1.deleteStoredFile)(job.fileName, job.fileUrl);
+    if (req.user) {
+        await (0, audit_service_js_1.logAudit)(req.user.id, client_1.AuditAction.JOB_DELETED, "Job", job.id, {
+            title: job.title
+        });
+    }
+    await (0, notification_service_js_1.createUserNotification)(db_js_1.prisma, {
+        userId: job.userId,
+        userEmail: job.user.email,
+        jobId: job.id,
+        type: "JOB_STATUS_CHANGED",
+        title: "Request deleted",
+        message: `Your request "${job.title}" was removed by a manager.`,
+        notifyEmail: true
+    });
     return (0, http_js_1.ok)(res, { id }, "Job deleted");
 };
 exports.deleteJob = deleteJob;

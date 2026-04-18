@@ -3,11 +3,13 @@ var __importDefault = (this && this.__importDefault) || function (mod) {
     return (mod && mod.__esModule) ? mod : { "default": mod };
 };
 Object.defineProperty(exports, "__esModule", { value: true });
-exports.deleteUser = exports.participants = exports.topUsers = exports.me = exports.login = exports.signup = void 0;
+exports.adminAuditLogs = exports.markNotificationRead = exports.myNotifications = exports.deleteUser = exports.participants = exports.topUsers = exports.me = exports.login = exports.signup = void 0;
 const bcryptjs_1 = __importDefault(require("bcryptjs"));
 const jsonwebtoken_1 = __importDefault(require("jsonwebtoken"));
+const client_1 = require("@prisma/client");
 const db_js_1 = require("../config/db.js");
 const env_js_1 = require("../config/env.js");
+const audit_service_js_1 = require("../services/audit.service.js");
 const storage_service_js_1 = require("../services/storage.service.js");
 const http_js_1 = require("../utils/http.js");
 const signToken = (id, email, role) => {
@@ -177,9 +179,67 @@ const deleteUser = async (req, res) => {
         }
         await tx.user.delete({ where: { id } });
     });
+    await (0, audit_service_js_1.logAudit)(authUser.id, "USER_DELETED", "User", id, {
+        deletedJobCount: jobIds.length
+    });
     for (const job of user.jobs) {
         await (0, storage_service_js_1.deleteStoredFile)(job.fileName, job.fileUrl || "");
     }
     return (0, http_js_1.ok)(res, { id }, "User deleted");
 };
 exports.deleteUser = deleteUser;
+const myNotifications = async (req, res) => {
+    const authUser = req.user;
+    if (!authUser) {
+        return (0, http_js_1.fail)(res, 401, "Authentication required");
+    }
+    const notifications = await db_js_1.prisma.notification.findMany({
+        where: {
+            userId: authUser.id,
+            channel: client_1.NotificationChannel.IN_APP
+        },
+        orderBy: { createdAt: "desc" },
+        take: 100
+    });
+    return (0, http_js_1.ok)(res, notifications);
+};
+exports.myNotifications = myNotifications;
+const markNotificationRead = async (req, res) => {
+    const authUser = req.user;
+    if (!authUser) {
+        return (0, http_js_1.fail)(res, 401, "Authentication required");
+    }
+    const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+    if (!id) {
+        return (0, http_js_1.fail)(res, 400, "Missing notification id");
+    }
+    const notification = await db_js_1.prisma.notification.findUnique({ where: { id } });
+    if (!notification || notification.userId !== authUser.id) {
+        return (0, http_js_1.fail)(res, 404, "Notification not found");
+    }
+    const updated = await db_js_1.prisma.notification.update({
+        where: { id },
+        data: {
+            readAt: notification.readAt ?? new Date()
+        }
+    });
+    return (0, http_js_1.ok)(res, updated);
+};
+exports.markNotificationRead = markNotificationRead;
+const adminAuditLogs = async (_req, res) => {
+    const logs = await db_js_1.prisma.auditLog.findMany({
+        include: {
+            adminUser: {
+                select: {
+                    id: true,
+                    email: true,
+                    name: true
+                }
+            }
+        },
+        orderBy: { createdAt: "desc" },
+        take: 200
+    });
+    return (0, http_js_1.ok)(res, logs);
+};
+exports.adminAuditLogs = adminAuditLogs;

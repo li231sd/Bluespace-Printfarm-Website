@@ -29,7 +29,16 @@ const approveJob = async (jobId) => {
         });
         return tx.job.update({
             where: { id: jobId },
-            data: { status: "APPROVED" }
+            data: { status: "APPROVED" },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        email: true,
+                        name: true,
+                    },
+                },
+            }
         });
     });
 };
@@ -60,6 +69,15 @@ const rejectJob = async (jobId, adminNotes) => {
             data: {
                 status: "REJECTED",
                 adminNotes
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        email: true,
+                        name: true,
+                    },
+                },
             }
         });
     });
@@ -112,6 +130,15 @@ const updateJobStatus = async (jobId, status, adminNotes) => {
             data: {
                 status,
                 adminNotes
+            },
+            include: {
+                user: {
+                    select: {
+                        id: true,
+                        email: true,
+                        name: true,
+                    },
+                },
             }
         });
     });

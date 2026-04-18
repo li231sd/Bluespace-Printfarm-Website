@@ -1,8 +1,10 @@
 import { Request, Response } from "express";
 import bcrypt from "bcryptjs";
 import jwt from "jsonwebtoken";
+import { NotificationChannel } from "@prisma/client";
 import { prisma } from "../config/db.js";
 import { env } from "../config/env.js";
+import { logAudit } from "../services/audit.service.js";
 import { deleteStoredFile } from "../services/storage.service.js";
 import { fail, ok, created } from "../utils/http.js";
 
@@ -204,9 +206,75 @@ export const deleteUser = async (req: Request, res: Response) => {
 		await tx.user.delete({ where: { id } });
 	});
 
+	await logAudit(authUser.id, "USER_DELETED", "User", id, {
+		deletedJobCount: jobIds.length
+	});
+
 	for (const job of user.jobs) {
 		await deleteStoredFile(job.fileName, job.fileUrl || "");
 	}
 
 	return ok(res, { id }, "User deleted");
+};
+
+export const myNotifications = async (req: Request, res: Response) => {
+	const authUser = req.user;
+	if (!authUser) {
+		return fail(res, 401, "Authentication required");
+	}
+
+	const notifications = await prisma.notification.findMany({
+		where: {
+			userId: authUser.id,
+			channel: NotificationChannel.IN_APP
+		},
+		orderBy: { createdAt: "desc" },
+		take: 100
+	});
+
+	return ok(res, notifications);
+};
+
+export const markNotificationRead = async (req: Request, res: Response) => {
+	const authUser = req.user;
+	if (!authUser) {
+		return fail(res, 401, "Authentication required");
+	}
+
+	const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+	if (!id) {
+		return fail(res, 400, "Missing notification id");
+	}
+
+	const notification = await prisma.notification.findUnique({ where: { id } });
+	if (!notification || notification.userId !== authUser.id) {
+		return fail(res, 404, "Notification not found");
+	}
+
+	const updated = await prisma.notification.update({
+		where: { id },
+		data: {
+			readAt: notification.readAt ?? new Date()
+		}
+	});
+
+	return ok(res, updated);
+};
+
+export const adminAuditLogs = async (_req: Request, res: Response) => {
+	const logs = await prisma.auditLog.findMany({
+		include: {
+			adminUser: {
+				select: {
+					id: true,
+					email: true,
+					name: true
+				}
+			}
+		},
+		orderBy: { createdAt: "desc" },
+		take: 200
+	});
+
+	return ok(res, logs);
 };

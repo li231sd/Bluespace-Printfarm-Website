@@ -110,5 +110,8 @@ export const api = {
     request<Array<{ id: string; name: string | null; email: string; credits: number; _count: { jobs: number } }>>(
       "/api/users/participants"
     ),
+  notifications: () => request<any[]>("/api/users/notifications"),
+  markNotificationRead: (id: string) => request(`/api/users/notifications/${id}/read`, { method: "PATCH" }),
+  auditLogs: () => request<any[]>("/api/users/audit-logs"),
   deleteUser: (id: string) => request(`/api/users/${id}`, { method: "DELETE" })
 };

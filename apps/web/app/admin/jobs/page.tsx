@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { AdminQueue } from "@/components/admin/admin-queue";
 import { GlassCard } from "@/components/shared/glass-card";
 import { api } from "@/lib/api";
-import { Job } from "@/lib/types";
+import { AuditLog, Job } from "@/lib/types";
 
 type Participant = {
   id: string;
@@ -16,6 +16,7 @@ type Participant = {
 
 export default function AdminJobsPage() {
   const [jobs, setJobs] = useState<Job[]>([]);
+  const [auditLogs, setAuditLogs] = useState<AuditLog[]>([]);
   const [participants, setParticipants] = useState<Participant[]>([]);
   const [creditInputs, setCreditInputs] = useState<Record<string, number>>({});
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
@@ -24,10 +25,11 @@ export default function AdminJobsPage() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    Promise.all([api.allJobs(), api.participants()])
-      .then(([allJobs, users]) => {
+    Promise.all([api.allJobs(), api.participants(), api.auditLogs()])
+      .then(([allJobs, users, logs]) => {
         setJobs(allJobs);
         setParticipants(users);
+        setAuditLogs(logs);
         setCreditInputs(
           users.reduce<Record<string, number>>((acc, user) => {
             acc[user.id] = user.credits;
@@ -89,12 +91,14 @@ export default function AdminJobsPage() {
     setError(null);
     try {
       await api.deleteUser(user.id);
-      const [allJobs, users] = await Promise.all([
+      const [allJobs, users, logs] = await Promise.all([
         api.allJobs(),
         api.participants(),
+        api.auditLogs(),
       ]);
       setJobs(allJobs);
       setParticipants(users);
+      setAuditLogs(logs);
       setCreditInputs(
         users.reduce<Record<string, number>>((acc, participant) => {
           acc[participant.id] = participant.credits;
@@ -119,6 +123,34 @@ export default function AdminJobsPage() {
         <p className="text-sm text-cream/70">Loading queue...</p>
       ) : null}
       <AdminQueue initialJobs={jobs} />
+
+      <GlassCard className="space-y-4">
+        <h2 className="text-xl font-bold text-cream">Manager Audit Trail</h2>
+        {auditLogs.length === 0 ? (
+          <p className="text-sm text-cream/70">
+            No manager actions logged yet.
+          </p>
+        ) : (
+          <div className="space-y-2">
+            {auditLogs.slice(0, 30).map((log) => (
+              <div
+                key={log.id}
+                className="rounded-2xl border border-blue-mid/35 bg-space-800/65 px-4 py-3"
+              >
+                <p className="text-sm font-semibold text-cream">
+                  {log.action} • {log.entityType} {log.entityId}
+                </p>
+                <p className="text-xs text-cream/65">
+                  {log.adminUser?.name ||
+                    log.adminUser?.email ||
+                    log.adminUserId}{" "}
+                  • {new Date(log.createdAt).toLocaleString()}
+                </p>
+              </div>
+            ))}
+          </div>
+        )}
+      </GlassCard>
 
       <GlassCard className="space-y-4">
         <h2 className="text-xl font-bold text-cream">Participants</h2>

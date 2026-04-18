@@ -5,6 +5,11 @@ import { api } from "@/lib/api";
 import { useSession } from "@/hooks/use-session";
 import { GlassCard } from "@/components/shared/glass-card";
 
+type PreflightResult = {
+  errors: string[];
+  warnings: string[];
+};
+
 const toPositiveNumber = (value: string | undefined, fallback: number) => {
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : fallback;
@@ -23,9 +28,79 @@ const CREDIT_PER_GRAM = toPositiveNumber(
   1,
 );
 
+const hasObjGeometry = (text: string) => {
+  const lines = text.split(/\r?\n/);
+  const hasVertices = lines.some((line) => line.startsWith("v "));
+  const hasFaces = lines.some((line) => line.startsWith("f "));
+  return hasVertices && hasFaces;
+};
+
+const hasAsciiStlGeometry = (text: string) => {
+  const normalized = text.toLowerCase();
+  return normalized.includes("facet normal") && normalized.includes("vertex");
+};
+
+const hasBinaryStlGeometry = (buffer: ArrayBuffer) => {
+  if (buffer.byteLength < 84) {
+    return false;
+  }
+
+  const view = new DataView(buffer);
+  const triangleCount = view.getUint32(80, true);
+  return triangleCount > 0;
+};
+
+const runPreflightChecks = async (file: File): Promise<PreflightResult> => {
+  const errors: string[] = [];
+  const warnings: string[] = [];
+  const extension = file.name.split(".").pop()?.toLowerCase();
+
+  if (!extension || !["stl", "obj"].includes(extension)) {
+    errors.push("Unsupported file type. Please use STL or OBJ.");
+    return { errors, warnings };
+  }
+
+  if (file.size < 512) {
+    errors.push("File appears too small to contain printable geometry.");
+  }
+
+  if (file.size > 35 * 1024 * 1024) {
+    warnings.push(
+      "Large model detected. Review and print setup may take longer.",
+    );
+  }
+
+  if (extension === "obj") {
+    const text = await file.text();
+    if (!hasObjGeometry(text)) {
+      errors.push("OBJ sanity check failed: missing vertex or face records.");
+    }
+  }
+
+  if (extension === "stl") {
+    const buffer = await file.arrayBuffer();
+    const textSample = new TextDecoder().decode(
+      buffer.slice(0, Math.min(buffer.byteLength, 1024 * 64)),
+    );
+    const looksAscii = textSample.trimStart().toLowerCase().startsWith("solid");
+    const valid = looksAscii
+      ? hasAsciiStlGeometry(textSample)
+      : hasBinaryStlGeometry(buffer);
+    if (!valid) {
+      errors.push("STL sanity check failed: mesh facets were not detected.");
+    }
+  }
+
+  return { errors, warnings };
+};
+
 export default function SubmitJob() {
   const { user } = useSession();
   const [file, setFile] = useState<File | null>(null);
+  const [preflight, setPreflight] = useState<PreflightResult>({
+    errors: [],
+    warnings: [],
+  });
   const [uploading, setUploading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const router = useRouter();
@@ -45,13 +120,18 @@ export default function SubmitJob() {
     return Math.ceil(estimatedFilamentGrams * CREDIT_PER_GRAM);
   }, [estimatedFilamentGrams]);
 
-  const canSubmit = !!user && !!file;
+  const canSubmit = !!user && !!file && preflight.errors.length === 0;
 
   const handleSubmit = async (e: FormEvent<HTMLFormElement>) => {
     e.preventDefault();
     setError(null);
     if (!file) {
       setError("Please upload STL or OBJ file.");
+      return;
+    }
+
+    if (preflight.errors.length > 0) {
+      setError("Please fix file issues before submitting.");
       return;
     }
 
@@ -125,7 +205,16 @@ export default function SubmitJob() {
               required
               aria-label="Upload STL or OBJ file"
               title="Upload STL or OBJ file"
-              onChange={(e) => setFile(e.target.files?.[0] ?? null)}
+              onChange={(e) => {
+                const nextFile = e.target.files?.[0] ?? null;
+                setFile(nextFile);
+                if (!nextFile) {
+                  setPreflight({ errors: [], warnings: [] });
+                  return;
+                }
+
+                void runPreflightChecks(nextFile).then(setPreflight);
+              }}
               className="input cursor-pointer"
             />
             <p className="mt-1 text-xs text-ink/55">
@@ -148,6 +237,20 @@ export default function SubmitJob() {
                 Select a file to preview the estimate.
               </p>
             )}
+            {preflight.errors.length > 0 ? (
+              <ul className="mt-3 space-y-1 text-xs text-rose-300">
+                {preflight.errors.map((item) => (
+                  <li key={item}>• {item}</li>
+                ))}
+              </ul>
+            ) : null}
+            {preflight.warnings.length > 0 ? (
+              <ul className="mt-3 space-y-1 text-xs text-amber-300">
+                {preflight.warnings.map((item) => (
+                  <li key={item}>• {item}</li>
+                ))}
+              </ul>
+            ) : null}
           </div>
 
           {error ? <p className="text-sm text-rose-600">{error}</p> : null}

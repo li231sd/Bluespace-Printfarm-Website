@@ -41,6 +41,20 @@ const statusLabel: Record<JobStatus, string> = {
   REJECTED: "Denied",
 };
 
+const formatEta = (etaMinutes?: number | null) => {
+  if (!etaMinutes && etaMinutes !== 0) {
+    return null;
+  }
+
+  if (etaMinutes < 60) {
+    return `${etaMinutes} min`;
+  }
+
+  const hours = Math.floor(etaMinutes / 60);
+  const minutes = etaMinutes % 60;
+  return minutes ? `${hours} hr ${minutes} min` : `${hours} hr`;
+};
+
 export function AdminQueue({ initialJobs }: { initialJobs: Job[] }) {
   const [jobs, setJobs] = useState(initialJobs);
   const [busyId, setBusyId] = useState<string | null>(null);
@@ -123,9 +137,30 @@ export function AdminQueue({ initialJobs }: { initialJobs: Job[] }) {
                 {job.user?.name || job.user?.email} • {job.filamentGrams}g •{" "}
                 {job.creditCost} credits
               </p>
+              <p className="mt-1 text-xs text-cream/65">
+                {job.queuePosition
+                  ? `Queue #${job.queuePosition}`
+                  : "Not in active queue"}
+                {job.etaMinutes !== null && job.etaMinutes !== undefined
+                  ? ` • ETA ${formatEta(job.etaMinutes)}`
+                  : ""}
+              </p>
             </div>
             <StatusPill status={job.status} />
           </div>
+
+          {job.needsAttentionFlags?.length ? (
+            <div className="flex flex-wrap gap-2">
+              {job.needsAttentionFlags.map((flag) => (
+                <span
+                  key={flag}
+                  className="rounded-full border border-amber-500/35 bg-amber-500/15 px-2 py-1 text-[11px] font-semibold text-amber-200"
+                >
+                  Needs Attention: {flag}
+                </span>
+              ))}
+            </div>
+          ) : null}
 
           <div className="flex flex-wrap gap-2">
             {statuses.map((status) => (
@@ -182,6 +217,29 @@ export function AdminQueue({ initialJobs }: { initialJobs: Job[] }) {
               {job.fileName}
             </button>
           </div>
+
+          {job.timeline?.length ? (
+            <div className="rounded-2xl border border-blue-mid/25 bg-space-900/35 p-3">
+              <p className="text-xs font-semibold uppercase tracking-wider text-cream/70">
+                Status timeline
+              </p>
+              <ul className="mt-2 space-y-1">
+                {job.timeline.map((event) => (
+                  <li key={event.id} className="text-xs text-cream/80">
+                    <span className="font-semibold text-cream">
+                      {event.label}
+                    </span>{" "}
+                    <span className="text-cream/60">
+                      {new Date(event.createdAt).toLocaleString()}
+                    </span>
+                    {event.notes ? (
+                      <span className="text-cream/65"> • {event.notes}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : null}
         </GlassCard>
       ))}
     </div>

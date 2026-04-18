@@ -34,7 +34,16 @@ export const approveJob = async (jobId: string) => {
 
     return tx.job.update({
       where: { id: jobId },
-      data: { status: "APPROVED" }
+      data: { status: "APPROVED" },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          },
+        },
+      }
     });
   });
 };
@@ -68,6 +77,15 @@ export const rejectJob = async (jobId: string, adminNotes?: string) => {
       data: {
         status: "REJECTED",
         adminNotes
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          },
+        },
       }
     });
   });
@@ -128,6 +146,15 @@ export const updateJobStatus = async (jobId: string, status: JobStatus, adminNot
       data: {
         status,
         adminNotes
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+          },
+        },
       }
     });
   });

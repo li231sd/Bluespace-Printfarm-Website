@@ -5,6 +5,24 @@ import { api } from "@/lib/api";
 import { GlassCard } from "@/components/shared/glass-card";
 import { StatusPill } from "@/components/shared/status-pill";
 
+const formatEta = (etaMinutes?: number | null) => {
+  if (!etaMinutes && etaMinutes !== 0) {
+    return null;
+  }
+
+  if (etaMinutes < 60) {
+    return `${etaMinutes} min`;
+  }
+
+  const hours = Math.floor(etaMinutes / 60);
+  const minutes = etaMinutes % 60;
+  if (minutes === 0) {
+    return `${hours} hr`;
+  }
+
+  return `${hours} hr ${minutes} min`;
+};
+
 export function JobList({ jobs }: { jobs: Job[] }) {
   const onDownload = async (jobId: string, fileName: string) => {
     try {
@@ -35,6 +53,12 @@ export function JobList({ jobs }: { jobs: Job[] }) {
               <div className="mt-3 flex items-center gap-3 text-xs text-ink/60">
                 <span>{job.filamentGrams}g</span>
                 <span>{job.creditCost} credits</span>
+                {job.queuePosition ? (
+                  <span>Queue #{job.queuePosition}</span>
+                ) : null}
+                {job.etaMinutes !== null && job.etaMinutes !== undefined ? (
+                  <span>ETA {formatEta(job.etaMinutes)}</span>
+                ) : null}
                 <button
                   type="button"
                   onClick={() => void onDownload(job.id, job.fileName)}
@@ -43,6 +67,43 @@ export function JobList({ jobs }: { jobs: Job[] }) {
                   {job.fileName}
                 </button>
               </div>
+              {job.needsAttentionFlags?.length ? (
+                <div className="mt-3 flex flex-wrap gap-2">
+                  {job.needsAttentionFlags.map((flag) => (
+                    <span
+                      key={flag}
+                      className="rounded-full border border-amber-500/35 bg-amber-500/15 px-2 py-1 text-[11px] font-semibold text-amber-200"
+                    >
+                      Needs Attention: {flag}
+                    </span>
+                  ))}
+                </div>
+              ) : null}
+              {job.timeline?.length ? (
+                <div className="mt-4 rounded-2xl border border-blue-mid/20 bg-space-900/35 p-3">
+                  <p className="text-xs font-semibold uppercase tracking-wider text-cream/70">
+                    Timeline
+                  </p>
+                  <ul className="mt-2 space-y-2">
+                    {job.timeline.map((event) => (
+                      <li key={event.id} className="text-xs text-cream/80">
+                        <span className="font-semibold text-cream">
+                          {event.label}
+                        </span>{" "}
+                        <span className="text-cream/60">
+                          {new Date(event.createdAt).toLocaleString()}
+                        </span>
+                        {event.notes ? (
+                          <span className="text-cream/70">
+                            {" "}
+                            • {event.notes}
+                          </span>
+                        ) : null}
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </div>
             <StatusPill status={job.status} />
           </div>

@@ -21,6 +21,25 @@ enum JobStatus {
   REJECTED
 }
 
+enum NotificationChannel {
+  IN_APP
+  EMAIL
+}
+
+enum NotificationType {
+  JOB_SUBMITTED
+  JOB_STATUS_CHANGED
+  JOB_NEEDS_ATTENTION
+  CREDIT_UPDATED
+}
+
+enum AuditAction {
+  JOB_STATUS_UPDATED
+  JOB_DELETED
+  CREDIT_ADJUSTED
+  USER_DELETED
+}
+
 model User {
   id            String    @id @default(cuid())
   email         String    @unique
@@ -30,6 +49,9 @@ model User {
   credits       Int       @default(1000)
   jobs          Job[]
   transactions  CreditTransaction[]
+  notifications Notification[]
+  timelineEvents JobTimelineEvent[] @relation("TimelineActor")
+  adminAuditLogs AuditLog[] @relation("AdminAuditActor")
   createdAt     DateTime  @default(now())
 }
 
@@ -45,6 +67,9 @@ model Job {
   userId          String
   user            User      @relation(fields: [userId], references: [id])
   adminNotes      String?
+  needsAttentionFlags String[] @default([])
+  timeline        JobTimelineEvent[]
+  notifications   Notification[]
   createdAt       DateTime  @default(now())
   updatedAt       DateTime  @updatedAt
 
@@ -61,4 +86,50 @@ model CreditTransaction {
   createdAt   DateTime @default(now())
 
   @@index([userId, createdAt])
+}
+
+model JobTimelineEvent {
+  id          String     @id @default(cuid())
+  jobId       String
+  job         Job        @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  status      JobStatus?
+  label       String
+  notes       String?
+  actorUserId String?
+  actor       User?      @relation("TimelineActor", fields: [actorUserId], references: [id])
+  createdAt   DateTime   @default(now())
+
+  @@index([jobId, createdAt])
+}
+
+model Notification {
+  id          String              @id @default(cuid())
+  userId      String
+  user        User                @relation(fields: [userId], references: [id], onDelete: Cascade)
+  jobId       String?
+  job         Job?                @relation(fields: [jobId], references: [id], onDelete: SetNull)
+  type        NotificationType
+  channel     NotificationChannel
+  title       String
+  message     String
+  readAt      DateTime?
+  deliveredAt DateTime?
+  createdAt   DateTime            @default(now())
+
+  @@index([userId, channel, readAt, createdAt])
+  @@index([jobId, createdAt])
+}
+
+model AuditLog {
+  id           String      @id @default(cuid())
+  action       AuditAction
+  entityType   String
+  entityId     String
+  adminUserId  String
+  adminUser    User        @relation("AdminAuditActor", fields: [adminUserId], references: [id], onDelete: Cascade)
+  details      Json?
+  createdAt    DateTime    @default(now())
+
+  @@index([adminUserId, createdAt])
+  @@index([entityType, entityId, createdAt])
 }

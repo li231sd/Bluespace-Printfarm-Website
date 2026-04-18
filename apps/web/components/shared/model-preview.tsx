@@ -44,6 +44,10 @@ const loadObjectFromBuffer = async (fileName: string, buffer: ArrayBuffer) => {
         });
       }
     });
+    // Center OBJ objects by their bounding box
+    const box = new THREE.Box3().setFromObject(object);
+    const center = box.getCenter(new THREE.Vector3());
+    object.position.sub(center);
     return object;
   }
 
@@ -131,11 +135,7 @@ export function ModelPreview({
         maxDistance: distance * 1.35,
       };
 
-      camera.position.set(
-        center.x + distance * 0.8,
-        center.y + distance * 0.5,
-        center.z + distance * 0.8,
-      );
+      camera.position.set(center.x, center.y, center.z + distance);
       camera.near = Math.max(0.01, distance / 100);
       camera.far = distance * 25;
       camera.updateProjectionMatrix();
@@ -159,9 +159,9 @@ export function ModelPreview({
 
     const resetView = () => {
       camera.position.set(
-        framing.center.x + framing.distance * 0.8,
-        framing.center.y + framing.distance * 0.5,
-        framing.center.z + framing.distance * 0.8,
+        framing.center.x,
+        framing.center.y,
+        framing.center.z + framing.distance,
       );
       controls.target.copy(framing.center);
       controls.update();
@@ -259,7 +259,7 @@ export function ModelPreview({
         </p>
       ) : null}
       {showUsageHint ? (
-        <p className="mt-2 text-[11px] text-cream/60">
+        <p className="mt-2 pb-2 text-[11px] text-cream/60">
           Drag to rotate, scroll to zoom, and double-click to re-center the
           model.
         </p>

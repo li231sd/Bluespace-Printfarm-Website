@@ -6,6 +6,7 @@ import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { api } from "@/lib/api";
+import { ModelViewerModal } from "./model-viewer-modal";
 
 type Viewer3DProps = {
   file?: File | null;
@@ -255,5 +256,41 @@ export function Viewer3D({ file, jobId, fileName, className }: Viewer3DProps) {
   );
 }
 
-// Backwards compatibility alias
-export const ModelPreview = Viewer3D;
+// Preview with button to open full-screen modal
+export function ModelPreview({
+  file,
+  jobId,
+  fileName,
+  className,
+}: Viewer3DProps) {
+  const [isModalOpen, setIsModalOpen] = useState(false);
+
+  return (
+    <>
+      <div className={className}>
+        <div className="relative">
+          <Viewer3D
+            file={file}
+            jobId={jobId}
+            fileName={fileName}
+            className="h-full"
+          />
+          <button
+            onClick={() => setIsModalOpen(true)}
+            className="absolute bottom-3 right-3 rounded-lg bg-blue-mid/80 px-3 py-1.5 text-xs font-medium text-cream transition-colors hover:bg-blue-mid"
+            aria-label="View in fullscreen"
+          >
+            Expand
+          </button>
+        </div>
+      </div>
+      <ModelViewerModal
+        isOpen={isModalOpen}
+        onClose={() => setIsModalOpen(false)}
+        file={file}
+        jobId={jobId}
+        fileName={fileName}
+      />
+    </>
+  );
+}

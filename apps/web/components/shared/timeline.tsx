@@ -14,24 +14,22 @@ export function Timeline({ events }: { events: JobTimelineEvent[] }) {
       </p>
       <div className="space-y-0">
         {events.map((event, index) => (
-          <div key={event.id} className="relative pl-8">
+          <div key={event.id} className="relative pl-6">
             {/* Vertical line */}
             {index < events.length - 1 && (
-              <div className="absolute left-3 top-8 h-8 w-0.5 bg-gradient-to-b from-blue-mid/60 to-blue-mid/20" />
+              <div className="absolute left-2 top-5 h-6 w-px bg-gradient-to-b from-blue-mid/50 to-blue-mid/10" />
             )}
 
             {/* Circle dot */}
-            <div className="absolute left-0 top-1.5 h-7 w-7 rounded-full border-2 border-blue-mid bg-space-900/80 flex items-center justify-center">
-              <div className="h-3 w-3 rounded-full bg-blue-mid/80" />
-            </div>
+            <div className="absolute left-0.5 top-1 h-4 w-4 rounded-full border border-blue-mid/70 bg-blue-mid/20" />
 
             {/* Event content */}
-            <div className="pb-4">
-              <div className="flex items-baseline justify-between">
+            <div className="pb-3">
+              <div className="flex items-baseline justify-between gap-2">
                 <span className="font-semibold text-cream text-sm">
                   {event.label}
                 </span>
-                <span className="text-xs text-cream/50 ml-2">
+                <span className="text-xs text-cream/50 flex-shrink-0">
                   {new Date(event.createdAt).toLocaleString()}
                 </span>
               </div>

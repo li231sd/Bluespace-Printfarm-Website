@@ -7,12 +7,11 @@ import { STLLoader } from "three/examples/jsm/loaders/STLLoader.js";
 import { OBJLoader } from "three/examples/jsm/loaders/OBJLoader.js";
 import { api } from "@/lib/api";
 
-type ModelPreviewProps = {
+type Viewer3DProps = {
   file?: File | null;
   jobId?: string;
   fileName: string;
   className?: string;
-  showUsageHint?: boolean;
 };
 
 const loadObjectFromBuffer = async (fileName: string, buffer: ArrayBuffer) => {
@@ -54,13 +53,7 @@ const loadObjectFromBuffer = async (fileName: string, buffer: ArrayBuffer) => {
   throw new Error("Unsupported model format");
 };
 
-export function ModelPreview({
-  file,
-  jobId,
-  fileName,
-  className,
-  showUsageHint = true,
-}: ModelPreviewProps) {
+export function Viewer3D({ file, jobId, fileName, className }: Viewer3DProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -126,18 +119,18 @@ export function ModelPreview({
       const fovRad = THREE.MathUtils.degToRad(camera.fov);
       const fitHeightDistance = radius / Math.tan(fovRad / 2);
       const fitWidthDistance = fitHeightDistance / Math.max(camera.aspect, 0.5);
-      const distance = 1.2 * Math.max(fitHeightDistance, fitWidthDistance);
+      const distance = 1.5 * Math.max(fitHeightDistance, fitWidthDistance);
 
       framing = {
         center: center.clone(),
         distance,
-        minDistance: distance * 0.75,
-        maxDistance: distance * 1.35,
+        minDistance: distance * 0.6,
+        maxDistance: distance * 1.5,
       };
 
       camera.position.set(center.x, center.y, center.z + distance);
       camera.near = Math.max(0.01, distance / 100);
-      camera.far = distance * 25;
+      camera.far = distance * 30;
       camera.updateProjectionMatrix();
 
       controls.target.copy(center);
@@ -218,8 +211,8 @@ export function ModelPreview({
         }
 
         scene.add(model);
-        fitCameraToObject(model);
         resize();
+        fitCameraToObject(model);
         animate();
       } catch (loadError) {
         setError((loadError as Error).message || "Unable to render preview");
@@ -258,12 +251,9 @@ export function ModelPreview({
           Preview unavailable: {error}
         </p>
       ) : null}
-      {showUsageHint ? (
-        <p className="mt-2 pb-2 text-[11px] text-cream/60">
-          Drag to rotate, scroll to zoom, and double-click to re-center the
-          model.
-        </p>
-      ) : null}
     </div>
   );
 }
+
+// Backwards compatibility alias
+export const ModelPreview = Viewer3D;

@@ -38,7 +38,7 @@ export function ModelViewerModal({
   return (
     <dialog
       ref={dialogRef}
-      className="fixed inset-0 w-full max-w-none overflow-auto rounded-none border-0 bg-space-900/95 backdrop:bg-black/50"
+      className="fixed inset-0 m-0 h-screen w-full max-w-none overflow-auto rounded-none border-0 bg-space-900/95 p-0 backdrop:bg-black/50"
       onClose={handleClose}
     >
       <div className="flex h-screen flex-col">

@@ -12,6 +12,7 @@ type ModelPreviewProps = {
   jobId?: string;
   fileName: string;
   className?: string;
+  showUsageHint?: boolean;
 };
 
 const loadObjectFromBuffer = async (fileName: string, buffer: ArrayBuffer) => {
@@ -54,6 +55,7 @@ export function ModelPreview({
   jobId,
   fileName,
   className,
+  showUsageHint = true,
 }: ModelPreviewProps) {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -92,6 +94,9 @@ export function ModelPreview({
     controls.dampingFactor = 0.06;
     controls.autoRotate = true;
     controls.autoRotateSpeed = 1.2;
+    controls.enablePan = false;
+    controls.minPolarAngle = 0.05;
+    controls.maxPolarAngle = Math.PI - 0.05;
 
     const keyLight = new THREE.DirectionalLight(0xb7ecff, 1.0);
     keyLight.position.set(50, 60, 70);
@@ -102,23 +107,42 @@ export function ModelPreview({
     scene.add(rimLight);
 
     let model: THREE.Object3D | null = null;
+    let framing = {
+      center: new THREE.Vector3(),
+      distance: 120,
+      minDistance: 80,
+      maxDistance: 180,
+    };
 
     const fitCameraToObject = (object: THREE.Object3D) => {
       const box = new THREE.Box3().setFromObject(object);
-      const center = box.getCenter(new THREE.Vector3());
-      const size = box.getSize(new THREE.Vector3());
-      const maxDim = Math.max(size.x, size.y, size.z) || 1;
-      const distance = maxDim * 1.7;
+      const sphere = box.getBoundingSphere(new THREE.Sphere());
+      const center = sphere.center;
+      const radius = Math.max(sphere.radius, 1);
+      const fovRad = THREE.MathUtils.degToRad(camera.fov);
+      const fitHeightDistance = radius / Math.tan(fovRad / 2);
+      const fitWidthDistance = fitHeightDistance / Math.max(camera.aspect, 0.5);
+      const distance = 1.2 * Math.max(fitHeightDistance, fitWidthDistance);
+
+      framing = {
+        center: center.clone(),
+        distance,
+        minDistance: distance * 0.75,
+        maxDistance: distance * 1.35,
+      };
 
       camera.position.set(
-        center.x + distance,
-        center.y + distance * 0.6,
-        center.z + distance,
+        center.x + distance * 0.8,
+        center.y + distance * 0.5,
+        center.z + distance * 0.8,
       );
       camera.near = Math.max(0.01, distance / 100);
-      camera.far = distance * 20;
+      camera.far = distance * 25;
       camera.updateProjectionMatrix();
+
       controls.target.copy(center);
+      controls.minDistance = framing.minDistance;
+      controls.maxDistance = framing.maxDistance;
       controls.update();
     };
 
@@ -133,9 +157,41 @@ export function ModelPreview({
     const observer = new ResizeObserver(resize);
     observer.observe(host);
 
+    const resetView = () => {
+      camera.position.set(
+        framing.center.x + framing.distance * 0.8,
+        framing.center.y + framing.distance * 0.5,
+        framing.center.z + framing.distance * 0.8,
+      );
+      controls.target.copy(framing.center);
+      controls.update();
+    };
+
+    renderer.domElement.addEventListener("dblclick", resetView);
+
     let frameId = 0;
     const animate = () => {
       frameId = window.requestAnimationFrame(animate);
+      const distanceToTarget = camera.position.distanceTo(controls.target);
+      if (
+        distanceToTarget < controls.minDistance ||
+        distanceToTarget > controls.maxDistance
+      ) {
+        const clampedDistance = THREE.MathUtils.clamp(
+          distanceToTarget,
+          controls.minDistance,
+          controls.maxDistance,
+        );
+        const direction = camera.position
+          .clone()
+          .sub(controls.target)
+          .normalize();
+        camera.position.copy(
+          controls.target
+            .clone()
+            .add(direction.multiplyScalar(clampedDistance)),
+        );
+      }
       controls.update();
       renderer.render(scene, camera);
     };
@@ -178,6 +234,7 @@ export function ModelPreview({
       canceled = true;
       window.cancelAnimationFrame(frameId);
       observer.disconnect();
+      renderer.domElement.removeEventListener("dblclick", resetView);
       controls.dispose();
       if (model) {
         scene.remove(model);
@@ -199,6 +256,12 @@ export function ModelPreview({
       {error ? (
         <p className="mt-2 text-xs text-rose-300">
           Preview unavailable: {error}
+        </p>
+      ) : null}
+      {showUsageHint ? (
+        <p className="mt-2 text-[11px] text-cream/60">
+          Drag to rotate, scroll to zoom, and double-click to re-center the
+          model.
         </p>
       ) : null}
     </div>

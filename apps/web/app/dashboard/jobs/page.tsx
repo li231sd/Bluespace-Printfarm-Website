@@ -33,6 +33,15 @@ export default function UserJobsPage() {
     );
   };
 
+  const deleteNotification = async (id: string) => {
+    try {
+      await api.deleteNotification(id);
+      setNotifications((current) => current.filter((item) => item.id !== id));
+    } catch (err) {
+      console.error("Failed to delete notification", err);
+    }
+  };
+
   if (loading) {
     return <p className="text-sm text-ink/70">Loading your jobs...</p>;
   }
@@ -76,14 +85,32 @@ export default function UserJobsPage() {
                   <p className="text-xs text-cream/70">{item.message}</p>
                 </div>
                 {!item.readAt ? (
-                  <button
-                    onClick={() => void markRead(item.id)}
-                    className="rounded-full border border-blue-light/45 px-3 py-1 text-[11px] font-semibold text-cream"
-                  >
-                    Mark read
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      onClick={() => void markRead(item.id)}
+                      className="rounded-full border border-blue-light/45 px-3 py-1 text-[11px] font-semibold text-cream transition hover:bg-blue-mid/20"
+                    >
+                      Mark read
+                    </button>
+                    <button
+                      onClick={() => void deleteNotification(item.id)}
+                      className="rounded-full border border-red-500/45 px-2 py-1 text-[11px] font-semibold text-red-300 transition hover:bg-red-500/20"
+                      aria-label="Delete notification"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 ) : (
-                  <span className="text-[11px] text-cream/50">Read</span>
+                  <div className="flex items-center gap-2">
+                    <span className="text-[11px] text-cream/50">Read</span>
+                    <button
+                      onClick={() => void deleteNotification(item.id)}
+                      className="rounded-full border border-red-500/45 px-2 py-1 text-[11px] font-semibold text-red-300 transition hover:bg-red-500/20"
+                      aria-label="Delete notification"
+                    >
+                      ✕
+                    </button>
+                  </div>
                 )}
               </li>
             ))}

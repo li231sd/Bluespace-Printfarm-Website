@@ -261,6 +261,26 @@ export const markNotificationRead = async (req: Request, res: Response) => {
 	return ok(res, updated);
 };
 
+export const deleteNotification = async (req: Request, res: Response) => {
+	const authUser = req.user;
+	if (!authUser) {
+		return fail(res, 401, "Authentication required");
+	}
+
+	const id = Array.isArray(req.params.id) ? req.params.id[0] : req.params.id;
+	if (!id) {
+		return fail(res, 400, "Missing notification id");
+	}
+
+	const notification = await prisma.notification.findUnique({ where: { id } });
+	if (!notification || notification.userId !== authUser.id) {
+		return fail(res, 404, "Notification not found");
+	}
+
+	await prisma.notification.delete({ where: { id } });
+	return ok(res, { id }, "Notification deleted");
+};
+
 export const adminAuditLogs = async (_req: Request, res: Response) => {
 	const logs = await prisma.auditLog.findMany({
 		include: {

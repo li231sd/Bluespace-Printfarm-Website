@@ -130,6 +130,7 @@ export const api = {
     ),
   notifications: () => request<any[]>("/api/users/notifications"),
   markNotificationRead: (id: string) => request(`/api/users/notifications/${id}/read`, { method: "PATCH" }),
+  deleteNotification: (id: string) => request(`/api/users/notifications/${id}`, { method: "DELETE" }),
   auditLogs: () => request<any[]>("/api/users/audit-logs"),
   deleteUser: (id: string) => request(`/api/users/${id}`, { method: "DELETE" })
 };

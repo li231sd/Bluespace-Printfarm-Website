@@ -4,6 +4,7 @@ import { Job } from "@/lib/types";
 import { api } from "@/lib/api";
 import { GlassCard } from "@/components/shared/glass-card";
 import { StatusPill } from "@/components/shared/status-pill";
+import { Timeline } from "@/components/shared/timeline";
 
 const toPositiveNumber = (value: string | undefined, fallback: number) => {
   const parsed = Number(value);
@@ -156,29 +157,7 @@ export function JobList({ jobs }: { jobs: Job[] }) {
                   </div>
                 ) : null}
                 {job.timeline?.length ? (
-                  <div className="mt-4 rounded-2xl border border-blue-mid/20 bg-space-900/35 p-3">
-                    <p className="text-xs font-semibold uppercase tracking-wider text-cream/70">
-                      Timeline
-                    </p>
-                    <ul className="mt-2 space-y-2">
-                      {job.timeline.map((event) => (
-                        <li key={event.id} className="text-xs text-cream/80">
-                          <span className="font-semibold text-cream">
-                            {event.label}
-                          </span>{" "}
-                          <span className="text-cream/60">
-                            {new Date(event.createdAt).toLocaleString()}
-                          </span>
-                          {event.notes ? (
-                            <span className="text-cream/70">
-                              {" "}
-                              • {event.notes}
-                            </span>
-                          ) : null}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
+                  <Timeline events={job.timeline} />
                 ) : null}
               </div>
               <div className="space-y-3">

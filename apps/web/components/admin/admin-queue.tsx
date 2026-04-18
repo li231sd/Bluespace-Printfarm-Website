@@ -5,6 +5,7 @@ import { Job, JobStatus } from "@/lib/types";
 import { api } from "@/lib/api";
 import { GlassCard } from "@/components/shared/glass-card";
 import { StatusPill } from "@/components/shared/status-pill";
+import { Timeline } from "@/components/shared/timeline";
 
 const statuses: JobStatus[] = ["APPROVED", "REJECTED", "COMPLETED"];
 
@@ -218,28 +219,7 @@ export function AdminQueue({ initialJobs }: { initialJobs: Job[] }) {
             </button>
           </div>
 
-          {job.timeline?.length ? (
-            <div className="rounded-2xl border border-blue-mid/25 bg-space-900/35 p-3">
-              <p className="text-xs font-semibold uppercase tracking-wider text-cream/70">
-                Status timeline
-              </p>
-              <ul className="mt-2 space-y-1">
-                {job.timeline.map((event) => (
-                  <li key={event.id} className="text-xs text-cream/80">
-                    <span className="font-semibold text-cream">
-                      {event.label}
-                    </span>{" "}
-                    <span className="text-cream/60">
-                      {new Date(event.createdAt).toLocaleString()}
-                    </span>
-                    {event.notes ? (
-                      <span className="text-cream/65"> • {event.notes}</span>
-                    ) : null}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ) : null}
+          {job.timeline?.length ? <Timeline events={job.timeline} /> : null}
         </GlassCard>
       ))}
     </div>

@@ -239,7 +239,7 @@ export function Viewer3D({ file, jobId, fileName, className }: Viewer3DProps) {
   }, [source]);
 
   return (
-    <div className={className}>
+    <div className={`w-full ${className || ""}`}>
       <div
         ref={hostRef}
         className="relative h-full min-h-[180px] w-full overflow-hidden rounded-2xl border border-blue-mid/35 bg-space-900/55"

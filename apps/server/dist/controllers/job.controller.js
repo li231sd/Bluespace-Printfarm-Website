@@ -9,6 +9,7 @@ const job_inspection_service_js_1 = require("../services/job-inspection.service.
 const job_service_js_1 = require("../services/job.service.js");
 const notification_service_js_1 = require("../services/notification.service.js");
 const storage_service_js_1 = require("../services/storage.service.js");
+const virus_scan_service_js_1 = require("../services/virus-scan.service.js");
 const http_js_1 = require("../utils/http.js");
 const estimateFilamentGrams = (fileSizeBytes) => {
     // Conservative heuristic calibrated to avoid underestimating lightweight parts.
@@ -91,6 +92,49 @@ const createJob = async (req, res) => {
         });
         return createdJob;
     });
+    // Scan file with VirusTotal if enabled
+    if (env_js_1.env.enableVirusScan && env_js_1.env.virusTotalApiKey) {
+        try {
+            // Get the actual file path for scanning
+            const { resolveStoredFilePath } = await import("../services/storage.service.js");
+            const filePath = resolveStoredFilePath(fileName);
+            if (filePath) {
+                const scanResult = await (0, virus_scan_service_js_1.scanFileWithVirusTotal)(filePath);
+                // Update job with scan results
+                await db_js_1.prisma.job.update({
+                    where: { id: job.id },
+                    data: {
+                        virusScanId: scanResult.scanId,
+                        virusClean: scanResult.isClean,
+                        virusThreats: scanResult.threat,
+                        virusSeverity: scanResult.threatSeverity,
+                        virusDetectionRatio: scanResult.detectionRatio,
+                        virusScanDate: scanResult.scanDate ? new Date(scanResult.scanDate) : null
+                    }
+                });
+                // Add virus threat flag if file is not clean
+                if (!scanResult.isClean && scanResult.threat) {
+                    const updatedNeedsAttentionFlags = [...needsAttentionFlags, `virus_threat: ${scanResult.threat}`];
+                    await db_js_1.prisma.job.update({
+                        where: { id: job.id },
+                        data: { needsAttentionFlags: updatedNeedsAttentionFlags }
+                    });
+                    // Notify admins of virus threat
+                    await notifyAdmins({
+                        jobId: job.id,
+                        type: "JOB_NEEDS_ATTENTION",
+                        title: "Security Alert: Potential Malware Detected",
+                        message: `Job "${job.title}" failed virus scan. Threat: ${scanResult.threat}. Detection ratio: ${scanResult.detectionRatio || 'unknown'}.`,
+                        notifyEmail: true
+                    });
+                }
+            }
+        }
+        catch (error) {
+            console.error("Virus scan error:", error);
+            // Log error but don't block job creation
+        }
+    }
     await (0, notification_service_js_1.createUserNotification)(db_js_1.prisma, {
         userId: account.id,
         userEmail: account.email,

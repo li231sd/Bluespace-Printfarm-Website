@@ -220,6 +220,11 @@ export const getVirusScanningSatus = () => {
 		status: env.enableVirusScan ? "active" : "disabled"
 	};
 };
+
+/**
+ * Get scan status for an existing scan ID
+ */
+export const getVirusScanStatus = async (analysisId: string): Promise<VirusScanResult> => {
 	if (!env.virusTotalApiKey) {
 		return {
 			isClean: true,

@@ -33,5 +33,7 @@ exports.env = {
     awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID,
     awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
     awsBucket: process.env.AWS_S3_BUCKET,
-    awsEndpoint: process.env.AWS_S3_ENDPOINT
+    awsEndpoint: process.env.AWS_S3_ENDPOINT,
+    virusTotalApiKey: process.env.VIRUSTOTAL_API_KEY,
+    enableVirusScan: process.env.ENABLE_VIRUS_SCAN === "true"
 };

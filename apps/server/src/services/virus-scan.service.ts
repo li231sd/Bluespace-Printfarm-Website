@@ -212,9 +212,14 @@ const pollScanResults = async (scanId: string, maxAttempts = 30): Promise<VirusS
 };
 
 /**
- * Get scan status for an existing scan ID
+ * Get virus scanning service status
  */
-export const getVirusScanStatus = async (analysisId: string): Promise<VirusScanResult> => {
+export const getVirusScanningSatus = () => {
+	return {
+		enabled: Boolean(env.enableVirusScan && env.virusTotalApiKey),
+		status: env.enableVirusScan ? "active" : "disabled"
+	};
+};
 	if (!env.virusTotalApiKey) {
 		return {
 			isClean: true,

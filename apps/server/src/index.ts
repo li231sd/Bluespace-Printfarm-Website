@@ -7,6 +7,7 @@ import creditRoutes from "./routes/credit.routes.js";
 import jobRoutes from "./routes/job.routes.js";
 import userRoutes from "./routes/user.routes.js";
 import { resolveStoredFilePath, resolveUploadDir } from "./services/storage.service.js";
+import { getVirusScanningSatus } from "./services/virus-scan.service.js";
 
 const app = express();
 
@@ -36,7 +37,12 @@ app.get("/uploads/:fileName", (req, res, next) => {
 });
 
 app.get("/health", (_req, res) => {
-	res.json({ ok: true, service: "3d-print-platform-server" });
+	const scanStatus = getVirusScanningSatus();
+	res.json({
+		ok: true,
+		service: "3d-print-platform-server",
+		scanning: scanStatus.enabled ? `${scanStatus.status}` : "disabled"
+	});
 });
 
 app.use("/api/users", userRoutes);

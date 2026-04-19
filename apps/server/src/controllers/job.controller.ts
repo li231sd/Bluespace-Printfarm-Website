@@ -107,7 +107,9 @@ export const createJob = async (req: Request, res: Response) => {
 				fileName,
 				fileUrl,
 				userId: user.id,
-				needsAttentionFlags
+				needsAttentionFlags,
+				scanStatus: "SAFE",
+				scannedAt: new Date()
 			}
 		});
 
@@ -428,7 +430,8 @@ export const downloadJobFile = async (req: Request, res: Response) => {
 			id: true,
 			userId: true,
 			fileName: true,
-			fileUrl: true
+			fileUrl: true,
+			scanStatus: true
 		}
 	});
 
@@ -438,6 +441,15 @@ export const downloadJobFile = async (req: Request, res: Response) => {
 
 	if (user.role !== "ADMIN" && user.id !== job.userId) {
 		return fail(res, 403, "Not allowed to access this file");
+	}
+
+	// Check if file has been scanned and is safe
+	if (job.scanStatus === "INFECTED") {
+		return fail(res, 403, "File failed security scan and cannot be downloaded");
+	}
+
+	if (job.scanStatus === "PENDING") {
+		return fail(res, 409, "File is still being scanned. Please try again shortly.");
 	}
 
 	const downloaded = await downloadStoredFile(job.fileName, job.fileUrl);

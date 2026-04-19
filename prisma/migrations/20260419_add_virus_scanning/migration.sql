@@ -1,0 +1,4 @@
+-- AlterTable
+ALTER TABLE "Job" ADD COLUMN "scanStatus" TEXT NOT NULL DEFAULT 'PENDING',
+ADD COLUMN "scanResults" JSONB,
+ADD COLUMN "scannedAt" TIMESTAMP(3);

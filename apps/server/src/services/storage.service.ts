@@ -3,6 +3,7 @@ import path from "node:path";
 import crypto from "node:crypto";
 import multer from "multer";
 import { env } from "../config/env.js";
+import { scanFileForVirus, isScanResultClean } from "./virus-scan.service.js";
 
 const SUPABASE_PREFIX = "supabase://";
 
@@ -139,6 +140,22 @@ const uploadToSupabase = async (file: Express.Multer.File) => {
 };
 
 export const uploadFileToStorage = async (file: Express.Multer.File) => {
+	// Scan file for viruses before storing
+	if (file.path) {
+		const scanResult = await scanFileForVirus(file.path);
+		if (!isScanResultClean(scanResult)) {
+			// Delete the infected file
+			try {
+				fs.unlinkSync(file.path);
+			} catch {
+				// Ignore cleanup errors
+			}
+			throw new Error(
+				`File failed security scan: ${scanResult?.threats.join(", ") || "Malware detected"}`
+			);
+		}
+	}
+
 	if (isSupabaseStorage()) {
 		return uploadToSupabase(file);
 	}

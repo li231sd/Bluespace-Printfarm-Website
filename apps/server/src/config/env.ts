@@ -30,5 +30,8 @@ export const env = {
 	awsAccessKeyId: process.env.AWS_ACCESS_KEY_ID,
 	awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
 	awsBucket: process.env.AWS_S3_BUCKET,
-	awsEndpoint: process.env.AWS_S3_ENDPOINT
+	awsEndpoint: process.env.AWS_S3_ENDPOINT,
+	clamavEnabled: process.env.CLAMAV_ENABLED === "true",
+	clamavHost: process.env.CLAMAV_HOST ?? "localhost",
+	clamavPort: toNumber(process.env.CLAMAV_PORT, 3310)
 };

@@ -31,7 +31,6 @@ export const env = {
 	awsSecretAccessKey: process.env.AWS_SECRET_ACCESS_KEY,
 	awsBucket: process.env.AWS_S3_BUCKET,
 	awsEndpoint: process.env.AWS_S3_ENDPOINT,
-	clamavEnabled: process.env.CLAMAV_ENABLED === "true",
-	clamavHost: process.env.CLAMAV_HOST ?? "localhost",
-	clamavPort: toNumber(process.env.CLAMAV_PORT, 3310)
+	virusTotalApiKey: process.env.VIRUSTOTAL_API_KEY,
+	enableVirusScan: process.env.ENABLE_VIRUS_SCAN === "true"
 };

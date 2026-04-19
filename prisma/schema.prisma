@@ -68,9 +68,12 @@ model Job {
   user            User      @relation(fields: [userId], references: [id])
   adminNotes      String?
   needsAttentionFlags String[] @default([])
-  scanStatus      String    @default("PENDING")  // PENDING, SAFE, INFECTED
-  scanResults     Json?
-  scannedAt       DateTime?
+  virusScanId     String?
+  virusClean      Boolean?
+  virusThreats    String?
+  virusSeverity   String?
+  virusDetectionRatio String?
+  virusScanDate   DateTime?
   timeline        JobTimelineEvent[]
   notifications   Notification[]
   createdAt       DateTime  @default(now())

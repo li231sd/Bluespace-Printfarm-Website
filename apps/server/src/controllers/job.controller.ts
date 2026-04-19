@@ -11,6 +11,7 @@ import {
 import { adjustEstimate, approveJob, rejectJob, updateJobStatus } from "../services/job.service.js";
 import { createUserNotification } from "../services/notification.service.js";
 import { deleteStoredFile, downloadStoredFile, uploadFileToStorage } from "../services/storage.service.js";
+import { scanFileWithVirusTotal } from "../services/virus-scan.service.js";
 import { fail, ok, created } from "../utils/http.js";
 
 const estimateFilamentGrams = (fileSizeBytes: number) => {
@@ -107,9 +108,7 @@ export const createJob = async (req: Request, res: Response) => {
 				fileName,
 				fileUrl,
 				userId: user.id,
-				needsAttentionFlags,
-				scanStatus: "SAFE",
-				scannedAt: new Date()
+				needsAttentionFlags
 			}
 		});
 
@@ -124,6 +123,53 @@ export const createJob = async (req: Request, res: Response) => {
 
 		return createdJob;
 	});
+
+	// Scan file with VirusTotal if enabled
+	if (env.enableVirusScan && env.virusTotalApiKey) {
+		try {
+			// Get the actual file path for scanning
+			const { resolveStoredFilePath } = await import("../services/storage.service.js");
+			const filePath = resolveStoredFilePath(fileName);
+
+			if (filePath) {
+				const scanResult = await scanFileWithVirusTotal(filePath);
+				
+				// Update job with scan results
+				await prisma.job.update({
+					where: { id: job.id },
+					data: {
+						virusScanId: scanResult.scanId,
+						virusClean: scanResult.isClean,
+						virusThreats: scanResult.threat,
+						virusSeverity: scanResult.threatSeverity,
+						virusDetectionRatio: scanResult.detectionRatio,
+						virusScanDate: scanResult.scanDate ? new Date(scanResult.scanDate) : null
+					}
+				});
+
+				// Add virus threat flag if file is not clean
+				if (!scanResult.isClean && scanResult.threat) {
+					const updatedNeedsAttentionFlags = [...needsAttentionFlags, `virus_threat: ${scanResult.threat}`];
+					await prisma.job.update({
+						where: { id: job.id },
+						data: { needsAttentionFlags: updatedNeedsAttentionFlags }
+					});
+
+					// Notify admins of virus threat
+					await notifyAdmins({
+						jobId: job.id,
+						type: "JOB_NEEDS_ATTENTION",
+						title: "Security Alert: Potential Malware Detected",
+						message: `Job "${job.title}" failed virus scan. Threat: ${scanResult.threat}. Detection ratio: ${scanResult.detectionRatio || 'unknown'}.`,
+						notifyEmail: true
+					});
+				}
+			}
+		} catch (error) {
+			console.error("Virus scan error:", error);
+			// Log error but don't block job creation
+		}
+	}
 
 	await createUserNotification(prisma, {
 		userId: account.id,
@@ -430,8 +476,7 @@ export const downloadJobFile = async (req: Request, res: Response) => {
 			id: true,
 			userId: true,
 			fileName: true,
-			fileUrl: true,
-			scanStatus: true
+			fileUrl: true
 		}
 	});
 
@@ -441,15 +486,6 @@ export const downloadJobFile = async (req: Request, res: Response) => {
 
 	if (user.role !== "ADMIN" && user.id !== job.userId) {
 		return fail(res, 403, "Not allowed to access this file");
-	}
-
-	// Check if file has been scanned and is safe
-	if (job.scanStatus === "INFECTED") {
-		return fail(res, 403, "File failed security scan and cannot be downloaded");
-	}
-
-	if (job.scanStatus === "PENDING") {
-		return fail(res, 409, "File is still being scanned. Please try again shortly.");
 	}
 
 	const downloaded = await downloadStoredFile(job.fileName, job.fileUrl);

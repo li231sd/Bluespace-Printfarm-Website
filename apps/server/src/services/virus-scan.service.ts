@@ -1,103 +1,274 @@
-import NodeClam from "clamav.js";
+import fs from "node:fs";
+import path from "node:path";
+import FormData from "form-data";
 import { env } from "../config/env.js";
 
-let clamscan: any = null;
-
-const initClamav = async () => {
-	if (!env.clamavEnabled) {
-		return null;
-	}
-
-	if (clamscan) {
-		return clamscan;
-	}
-
-	try {
-		clamscan = await new NodeClam().init({
-			clamdscan: {
-				host: env.clamavHost,
-				port: env.clamavPort
-			}
-		});
-		console.log("[ClamAV] Connected to ClamAV daemon");
-		return clamscan;
-	} catch (error) {
-		console.error("[ClamAV] Failed to initialize:", error);
-		return null;
-	}
-};
-
-export interface ScanResult {
-	isInfected: boolean;
-	threats: string[];
-	timestamp: Date;
+export interface VirusScanResult {
+	scanId?: string;
+	isClean: boolean;
+	threat?: string;
+	threatSeverity?: "critical" | "high" | "medium" | "low" | "unknown";
+	detectionRatio?: string; // e.g. "2/70"
+	scanDate?: string;
+	error?: string;
 }
 
-/**
- * Scan a file for viruses/malware
- * Returns null if scanning is disabled or ClamAV is unavailable
- */
-export const scanFileForVirus = async (filePath: string): Promise<ScanResult | null> => {
-	const scanner = await initClamav();
+const VIRUSTOTAL_API_URL = "https://www.virustotal.com/api/v3";
 
-	if (!scanner) {
-		console.warn("[ClamAV] Scanning disabled - ClamAV not available");
-		return null;
+export const scanFileWithVirusTotal = async (filePath: string): Promise<VirusScanResult> => {
+	if (!env.virusTotalApiKey) {
+		return {
+			isClean: true,
+			error: "VirusTotal API key not configured"
+		};
+	}
+
+	if (!env.enableVirusScan) {
+		return {
+			isClean: true,
+			error: "Virus scanning is disabled"
+		};
 	}
 
 	try {
-		const { isInfected, viruses } = await scanner.scanFile(filePath);
-
-		if (isInfected) {
-			console.warn(`[ClamAV] Infected file detected: ${filePath}`, viruses);
+		// Check if file exists
+		if (!fs.existsSync(filePath)) {
+			return {
+				isClean: false,
+				error: "File not found",
+				threat: "FILE_NOT_FOUND"
+			};
 		}
 
-		return {
-			isInfected,
-			threats: viruses || [],
-			timestamp: new Date()
-		};
+		// Get file size - VirusTotal free tier has 650MB limit
+		const fileStats = fs.statSync(filePath);
+		if (fileStats.size > 650 * 1024 * 1024) {
+			return {
+				isClean: false,
+				error: "File exceeds VirusTotal size limit (650MB)",
+				threat: "FILE_TOO_LARGE"
+			};
+		}
+
+		// Submit file for scanning
+		const scanResult = await submitFileToVirusTotal(filePath);
+		
+		if (scanResult.error) {
+			return scanResult;
+		}
+
+		if (!scanResult.scanId) {
+			return {
+				isClean: false,
+				error: "Failed to get scan ID from VirusTotal",
+				threat: "SCAN_FAILED"
+			};
+		}
+
+		// Poll for scan results with timeout
+		const analysisResult = await pollScanResults(scanResult.scanId);
+		
+		return analysisResult;
 	} catch (error) {
-		console.error("[ClamAV] Scan error:", error);
-		// Return null on error - don't block uploads if scanner fails
-		return null;
+		const message = error instanceof Error ? error.message : "Unknown error";
+		return {
+			isClean: false,
+			error: `Virus scan failed: ${message}`,
+			threat: "SCAN_ERROR"
+		};
 	}
 };
 
-/**
- * Check if ClamAV scanning is healthy
- */
-export const getVirusScanningSatus = (): { enabled: boolean; status: string } => {
-	if (!env.clamavEnabled) {
+const submitFileToVirusTotal = async (filePath: string): Promise<VirusScanResult> => {
+	const form = new FormData();
+	const fileStream = fs.createReadStream(filePath);
+	form.append("file", fileStream);
+
+	try {
+		const response = await fetch(`${VIRUSTOTAL_API_URL}/files`, {
+			method: "POST",
+			headers: {
+				"x-apikey": env.virusTotalApiKey!
+			},
+			body: form
+		});
+
+		if (!response.ok) {
+			const errorData = await response.json();
+			return {
+				isClean: false,
+				error: `VirusTotal API error: ${response.status}`,
+				threat: "API_ERROR"
+			};
+		}
+
+		const data = await response.json() as any;
+		const scanId = data.data?.id;
+
+		if (!scanId) {
+			return {
+				isClean: false,
+				error: "No scan ID returned from VirusTotal",
+				threat: "INVALID_RESPONSE"
+			};
+		}
+
+		return { scanId, isClean: true };
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "Unknown error";
 		return {
-			enabled: false,
-			status: "disabled"
+			isClean: false,
+			error: `Failed to submit file to VirusTotal: ${message}`,
+			threat: "SUBMISSION_FAILED"
 		};
 	}
+};
 
-	// If we haven't initialized yet or had an error, return pending
-	if (!clamscan) {
-		return {
-			enabled: true,
-			status: "pending"
-		};
+const pollScanResults = async (scanId: string, maxAttempts = 30): Promise<VirusScanResult> => {
+	// VirusTotal scan ID format: "file-{hash}"
+	const analysisId = scanId.split("-")[1] ? scanId : `file-${scanId}`;
+
+	for (let attempt = 0; attempt < maxAttempts; attempt++) {
+		try {
+			const response = await fetch(`${VIRUSTOTAL_API_URL}/analyses/${analysisId}`, {
+				method: "GET",
+				headers: {
+					"x-apikey": env.virusTotalApiKey!
+				}
+			});
+
+			if (!response.ok) {
+				if (response.status === 404) {
+					// Scan ID might be invalid, wait and retry
+					await new Promise(resolve => setTimeout(resolve, 2000));
+					continue;
+				}
+				return {
+					isClean: false,
+					error: `VirusTotal API error: ${response.status}`,
+					threat: "API_ERROR"
+				};
+			}
+
+			const data = await response.json() as any;
+			const analysis = data.data?.attributes;
+
+			if (!analysis) {
+				return {
+					isClean: false,
+					error: "Invalid response from VirusTotal",
+					threat: "INVALID_RESPONSE"
+				};
+			}
+
+			const status = analysis.status;
+
+			// Scan still in progress
+			if (status === "queued" || status === "running") {
+				// Wait before retrying
+				await new Promise(resolve => setTimeout(resolve, 2000));
+				continue;
+			}
+
+			// Scan completed
+			if (status === "completed") {
+				const stats = analysis.stats || {};
+				const maliciousCount = stats.malicious || 0;
+				const suspiciousCount = stats.suspicious || 0;
+				const harmlessCount = stats.harmless || 0;
+				const totalEngines = maliciousCount + suspiciousCount + harmlessCount;
+
+				return {
+					scanId,
+					isClean: maliciousCount === 0 && suspiciousCount === 0,
+					threat: maliciousCount > 0 ? "MALWARE_DETECTED" : (suspiciousCount > 0 ? "SUSPICIOUS" : undefined),
+					threatSeverity: maliciousCount > 0 ? "high" : (suspiciousCount > 0 ? "medium" : "low"),
+					detectionRatio: `${maliciousCount + suspiciousCount}/${totalEngines}`,
+					scanDate: analysis.last_analysis_date ? new Date(analysis.last_analysis_date * 1000).toISOString() : undefined
+				};
+			}
+
+			// Unexpected status
+			return {
+				isClean: false,
+				error: `Unexpected scan status: ${status}`,
+				threat: "UNKNOWN_STATUS"
+			};
+		} catch (error) {
+			const message = error instanceof Error ? error.message : "Unknown error";
+			return {
+				isClean: false,
+				error: `Failed to get scan results: ${message}`,
+				threat: "POLL_ERROR"
+			};
+		}
 	}
 
 	return {
-		enabled: true,
-		status: "healthy"
+		isClean: false,
+		error: "Scan result polling timeout",
+		threat: "TIMEOUT"
 	};
 };
 
 /**
- * Check if a file should be blocked based on scan result
+ * Get scan status for an existing scan ID
  */
-export const isScanResultClean = (result: ScanResult | null): boolean => {
-	// If scanning is disabled or unavailable, allow the file
-	if (result === null) {
-		return true;
+export const getVirusScanStatus = async (analysisId: string): Promise<VirusScanResult> => {
+	if (!env.virusTotalApiKey) {
+		return {
+			isClean: true,
+			error: "VirusTotal API key not configured"
+		};
 	}
 
-	// Block if infected
-	return !result.isInfected;
+	try {
+		const response = await fetch(`${VIRUSTOTAL_API_URL}/analyses/${analysisId}`, {
+			method: "GET",
+			headers: {
+				"x-apikey": env.virusTotalApiKey
+			}
+		});
+
+		if (!response.ok) {
+			return {
+				isClean: false,
+				error: `VirusTotal API error: ${response.status}`,
+				threat: "API_ERROR"
+			};
+		}
+
+		const data = await response.json() as any;
+		const analysis = data.data?.attributes;
+
+		if (!analysis) {
+			return {
+				isClean: false,
+				error: "Invalid response from VirusTotal",
+				threat: "INVALID_RESPONSE"
+			};
+		}
+
+		const stats = analysis.stats || {};
+		const maliciousCount = stats.malicious || 0;
+		const suspiciousCount = stats.suspicious || 0;
+		const harmlessCount = stats.harmless || 0;
+		const totalEngines = maliciousCount + suspiciousCount + harmlessCount;
+
+		return {
+			scanId: analysisId,
+			isClean: maliciousCount === 0 && suspiciousCount === 0,
+			threat: maliciousCount > 0 ? "MALWARE_DETECTED" : (suspiciousCount > 0 ? "SUSPICIOUS" : undefined),
+			threatSeverity: maliciousCount > 0 ? "high" : (suspiciousCount > 0 ? "medium" : "low"),
+			detectionRatio: `${maliciousCount + suspiciousCount}/${totalEngines}`,
+			scanDate: analysis.last_analysis_date ? new Date(analysis.last_analysis_date * 1000).toISOString() : undefined
+		};
+	} catch (error) {
+		const message = error instanceof Error ? error.message : "Unknown error";
+		return {
+			isClean: false,
+			error: `Failed to get scan status: ${message}`,
+			threat: "API_ERROR"
+		};
+	}
 };

@@ -1,4 +1,7 @@
 -- AlterTable
-ALTER TABLE "Job" ADD COLUMN "scanStatus" TEXT NOT NULL DEFAULT 'PENDING',
-ADD COLUMN "scanResults" JSONB,
-ADD COLUMN "scannedAt" TIMESTAMP(3);
+ALTER TABLE "Job" ADD COLUMN "virusScanId" TEXT,
+ADD COLUMN "virusClean" BOOLEAN,
+ADD COLUMN "virusThreats" TEXT,
+ADD COLUMN "virusSeverity" TEXT,
+ADD COLUMN "virusDetectionRatio" TEXT,
+ADD COLUMN "virusScanDate" TIMESTAMP(3);

@@ -6,6 +6,7 @@
 		"dev": "tsx watch src/index.ts",
 		"prebuild": "prisma generate --schema ../../prisma/schema.prisma",
 		"build": "tsc -p tsconfig.json",
+		"prestart": "prisma migrate deploy --schema ../../prisma/schema.prisma",
 		"start": "node dist/index.js",
 		"lint": "tsc -p tsconfig.json --noEmit"
 	},
@@ -19,6 +20,7 @@
 		"form-data": "^4.0.0",
 		"jsonwebtoken": "^9.0.2",
 		"multer": "^1.4.5-lts.1",
+		"prisma": "^5.22.0",
 		"zod": "^3.24.1"
 	},
 	"devDependencies": {
